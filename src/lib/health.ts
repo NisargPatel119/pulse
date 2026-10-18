@@ -134,9 +134,9 @@ export async function fetchDays(n = 35) {
     run('heart-rate-variability', () => listAll('daily-heart-rate-variability', `daily_heart_rate_variability.date >= "${sinceD}"`, 100)),
     run('oxygen-saturation', () => listAll('daily-oxygen-saturation', `daily_oxygen_saturation.date >= "${sinceD}"`, 100)),
     run('respiratory-rate', () => listAll('daily-respiratory-rate', `daily_respiratory_rate.date >= "${sinceD}"`, 100)),
-    run('steps', () => listAll('steps', `steps.interval.start_time >= "${since}"`, 10000, 8)),
-    run('active-zone-minutes', () => listAll('active-zone-minutes', `active_zone_minutes.interval.start_time >= "${since}"`, 10000, 8)),
-    run('exercise', () => listAll('exercise', `exercise.interval.civil_start_time >= "${sinceD}"`, 25, 8)),
+    run('steps', () => listAll('steps', `steps.interval.start_time >= "${since}"`, 10000, 20)),
+    run('active-zone-minutes', () => listAll('active-zone-minutes', `active_zone_minutes.interval.start_time >= "${since}"`, 10000, 20)),
+    run('exercise', () => listAll('exercise', `exercise.interval.civil_start_time >= "${sinceD}"`, 25, 12)),
     run('skin-temperature', () => listAll('daily-sleep-temperature-derivations', `daily_sleep_temperature_derivations.date >= "${sinceD}"`, 100)),
     run('vo2-max', () => listAll('vo2-max', `vo2_max.sample_time.physical_time >= "${since}"`, 100, 2)),
   ]);

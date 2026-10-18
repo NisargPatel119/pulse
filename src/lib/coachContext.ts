@@ -18,6 +18,9 @@ export function buildCoachContext(p: any) {
     a.targetStrain ? `Target strain today: ${a.targetStrain[0]}-${a.targetStrain[1]}.` : '',
     a.drivers.length ? `Recovery drivers (correlation with next-day recovery): ${a.drivers.map((d: any) => `${d.label} r=${d.r}`).join(', ')}.` : '',
     'Week vs previous week: ' + a.weekly.map((w: any) => `${w.label} ${w.now ?? '-'} (${w.delta == null ? '-' : (w.delta > 0 ? '+' : '') + w.delta})`).join(', ') + '.',
+    p.healthspan?.bioAge != null
+      ? `Biological age (Pulse Age, wellness estimate): ${p.healthspan.bioAge} vs chronological ${p.healthspan.age} (${p.healthspan.offset > 0 ? '+' : ''}${p.healthspan.offset} years), pace of aging ${p.healthspan.pace}x. Contributors (years, + older / - younger): ${p.healthspan.metrics.map((m: any) => `${m.label} ${m.display}${m.unit} ${m.years > 0 ? '+' : ''}${m.years}`).join('; ')}. Biggest levers: ${p.healthspan.levers.map((l: any) => `${l.label} (-${l.gain}y)`).join(', ') || 'none'}.`
+      : '',
     '',
     'Automatic insights already shown to the user:',
     ...p.insights.map((i: any) => `- [${i.level}] ${i.title}: ${i.body}`),

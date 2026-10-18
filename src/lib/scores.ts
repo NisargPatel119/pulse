@@ -108,7 +108,8 @@ function analytics(days, prefs) {
   const debt = last7.filter((d) => d.sleep?.asleep).reduce((s, d) => s + Math.max(0, base - d.sleep.asleep), 0);
   const today = days[days.length - 1];
   const strainAdj = today?.strain >= 14 ? 30 : today?.strain >= 10 ? 15 : 0;
-  const need = clamp(Math.round(base + debt * 0.25 + strainAdj), base, base + 120);
+  // Debt adds at most an hour and the total at most 90 minutes over baseline, so the bedtime stays realistic
+  const need = clamp(Math.round(base + Math.min(60, debt * 0.25) + strainAdj), base, base + 90);
   const wakes = last7.filter((d) => d.sleep?.end).map((d) => hm(d.sleep.end));
   const wake = wakes.length ? mean(wakes) : 7 * 60;
   const lat = mean(last7.map((d) => d.sleep?.latency)) ?? 15;
@@ -364,4 +365,4 @@ function parseClock(s) {
   return ((+m[1] % 12) + (m[3] === 'PM' ? 12 : 0)) * 60 + +m[2];
 }
 
-export { enrich, insights, analytics, mean };
+export { enrich, insights, analytics, mean, hm, bedMinutes };

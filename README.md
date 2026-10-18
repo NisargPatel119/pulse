@@ -22,7 +22,9 @@ Data syncs when you open the app (if older than 30 min), on **Refresh**, and dai
 
 ## What you get
 Six tabs, built to work as well on your iPhone as on a laptop:
-- **Today:** Recovery, Sleep and Strain rings, an AI-written morning briefing (optional), today's target strain, tonight's bedtime plan, and your top insights.
+- **Today:** a one-screen glance: a one-line headline, Recovery/Sleep/Strain rings, today's strain vs target, tonight's bedtime, four vitals (HRV, resting HR, SpO2, steps), your Pulse Age, and anything that needs attention.
+- **Healthspan (Pulse Age):** a biological-age estimate and pace of aging, modeled on how WHOOP describes Healthspan (published mortality research per habit, overlap-corrected, up to 6 months of data; pace compares your last 30 days). It shows each habit's effect in years and your biggest levers. Set your age and sex in Settings. A transparent wellness estimate, not WHOOP's model or a medical test.
+- **Insights:** the full analysis and step-by-step advice, plus the optional AI coach below.
 - **Sleep:** performance score broken into duration, efficiency, restorative and consistency; stage timeline; sleep-need plan with debt; bed and wake times; per-night stage charts.
 - **Recovery:** what is driving your score (HRV, resting HR, respiration, SpO2, skin temperature vs your 28-day baseline), trend charts with baseline bands, and **what moves your recovery** (correlations from your own data).
 - **Activity:** strain, steps, active zone minutes, the 150-minute weekly goal, and a workout log.
