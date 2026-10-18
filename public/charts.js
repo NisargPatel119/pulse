@@ -57,7 +57,8 @@
     vals.forEach((v, i) => {
       if (v == null) return;
       const col = o.colorFn ? o.colorFn(v, days[i]) : o.color || css('--accent');
-      s += `<rect x="${f.x(i) - bw / 2}" y="${f.y(v)}" width="${bw}" height="${Math.max(1, f.y(f.lo) - f.y(v))}" rx="${Math.min(4, bw / 2)}" fill="${col}"/><rect class="hit" x="${f.x(i) - bw}" y="0" width="${bw * 2}" height="${f.H}" fill="transparent" data-tip="<b>${fmtDate(days[i].date)}</b><br>${o.fmt ? o.fmt(v, days[i]) : v}${o.unit || ''}"/>`;
+      const pat = o.patternFn ? o.patternFn(v, days[i]) : null;
+      s += `<rect x="${f.x(i) - bw / 2}" y="${f.y(v)}" width="${bw}" height="${Math.max(1, f.y(f.lo) - f.y(v))}" rx="${Math.min(4, bw / 2)}" fill="${pat ? `url(#${pat})` : col}"/><rect class="hit" x="${f.x(i) - bw}" y="0" width="${bw * 2}" height="${f.H}" fill="transparent" data-tip="<b>${fmtDate(days[i].date)}</b><br>${o.fmt ? o.fmt(v, days[i]) : v}${o.unit || ''}"/>`;
     });
     if (o.ref != null) s += `<line x1="${f.p.l}" x2="${f.W - f.p.r}" y1="${f.y(o.ref)}" y2="${f.y(o.ref)}" stroke="${css('--tx')}" stroke-dasharray="4 4" opacity=".45"/><text x="${f.W - f.p.r}" y="${f.y(o.ref) - 4}" text-anchor="end" class="ax">${o.refLabel || ''}</text>`;
     if (o.band) s += `<rect x="${f.p.l}" width="${f.W - f.p.l - f.p.r}" y="${f.y(o.band[1])}" height="${f.y(o.band[0]) - f.y(o.band[1])}" fill="${css('--strain')}" opacity=".10"/>`;
@@ -74,17 +75,17 @@
     days.forEach((d, i) => {
       if (!d.sleep || d.sleep.deep == null) return;
       let acc = 0;
-      const st = [['Deep', 'deep', '--deep'], ['REM', 'rem', '--rem'], ['Light', 'light', '--light']];
+      const st = [['Deep', 'deep', 'var(--deep)'], ['REM', 'rem', 'url(#p-rem)'], ['Light', 'light', 'var(--light)']];
       st.forEach(([name, k, col], j) => {
         const h = (d.sleep[k] || 0) / 60;
-        s += `<rect x="${f.x(i) - bw / 2}" y="${f.y(acc + h)}" width="${bw}" height="${Math.max(0, f.y(acc) - f.y(acc + h))}" fill="${css(col)}" rx="${j === 2 ? Math.min(4, bw / 2) : 0}"/>`;
+        s += `<rect x="${f.x(i) - bw / 2}" y="${f.y(acc + h)}" width="${bw}" height="${Math.max(0, f.y(acc) - f.y(acc + h))}" style="fill:${col}" rx="${j === 2 ? Math.min(4, bw / 2) : 0}"/>`;
         acc += h;
       });
       const hm = (m) => `${Math.floor(m / 60)}h ${Math.round(m % 60)}m`;
       s += `<rect class="hit" x="${f.x(i) - bw}" y="0" width="${bw * 2}" height="${f.H}" fill="transparent" data-tip="<b>${fmtDate(d.date)}</b><br>Asleep ${hm(d.sleep.asleep)}<br>Deep ${hm(d.sleep.deep)} · REM ${hm(d.sleep.rem)}<br>Light ${hm(d.sleep.light)}"/>`;
     });
     s += `<line x1="${f.p.l}" x2="${f.W - f.p.r}" y1="${f.y(needMin / 60)}" y2="${f.y(needMin / 60)}" stroke="${css('--tx')}" stroke-dasharray="4 4" opacity=".45"/><text x="${f.W - f.p.r}" y="${f.y(needMin / 60) - 4}" text-anchor="end" class="ax">need</text></svg>`;
-    return s + `<div class="legend"><span><i style="background:var(--deep)"></i>Deep</span><span><i style="background:var(--rem)"></i>REM</span><span><i style="background:var(--light)"></i>Light</span></div>`;
+    return s + `<div class="legend"><span><i class="sw st-deep"></i>Deep</span><span><i class="sw st-rem"></i>REM</span><span><i class="sw st-light"></i>Light</span></div>`;
   }
 
   // Bed -> wake floating bars; values are minutes after noon for bed, minutes after midnight for wake
@@ -110,7 +111,7 @@
   function hypnogram(sl) {
     if (!sl?.stages?.length) return empty('No stage timeline for this night');
     const t0 = new Date(sl.start).getTime(), t1 = new Date(sl.end).getTime();
-    const rows = { AWAKE: 0, REM: 1, LIGHT: 2, DEEP: 3 }, cols = { AWAKE: '--awake', REM: '--rem', LIGHT: '--light', DEEP: '--deep' };
+    const rows = { AWAKE: 0, REM: 1, LIGHT: 2, DEEP: 3 }, cols = { AWAKE: 'url(#p-awake)', REM: 'url(#p-rem)', LIGHT: 'var(--light)', DEEP: 'var(--deep)' };
     const W = 600, H = 150, L = 50;
     let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="sleep stage timeline">`;
     Object.keys(rows).forEach((k) => (s += `<line x1="${L}" x2="${W}" y1="${rows[k] * 30 + 20}" y2="${rows[k] * 30 + 20}" stroke="${css('--line')}"/><text x="0" y="${rows[k] * 30 + 24}" class="ax">${k[0] + k.slice(1).toLowerCase()}</text>`));
@@ -118,7 +119,7 @@
     sl.stages.forEach((g) => {
       const r = rows[g.type]; if (r == null) return;
       const a = L + ((new Date(g.start) - t0) / (t1 - t0)) * (W - L), b = L + ((new Date(g.end) - t0) / (t1 - t0)) * (W - L);
-      s += `<rect x="${a}" y="${r * 30 + 8}" width="${Math.max(2, b - a - 0.5)}" height="24" rx="4" fill="${css(cols[g.type])}" data-tip="<b>${g.type[0] + g.type.slice(1).toLowerCase()}</b><br>${tf(g.start)} – ${tf(g.end)}<br>${Math.round((new Date(g.end) - new Date(g.start)) / 60000)} min"/>`;
+      s += `<rect x="${a}" y="${r * 30 + 8}" width="${Math.max(2, b - a - 0.5)}" height="24" rx="4" style="fill:${cols[g.type]}" data-tip="<b>${g.type[0] + g.type.slice(1).toLowerCase()}</b><br>${tf(g.start)} – ${tf(g.end)}<br>${Math.round((new Date(g.end) - new Date(g.start)) / 60000)} min"/>`;
     });
     for (let k = 0; k <= 4; k++) { const t = t0 + ((t1 - t0) * k) / 4; s += `<text x="${L + ((W - L) * k) / 4}" y="${H - 6}" text-anchor="${k === 0 ? 'start' : k === 4 ? 'end' : 'middle'}" class="ax">${tf(t)}</text>`; }
     return s + '</svg>';
@@ -134,7 +135,7 @@
       ${o.unit ? `<text x="50%" y="${size * 0.68}" text-anchor="middle" class="ru" font-size="${size * 0.085}">${o.unit}</text>` : ''}</svg>`;
   }
 
-  function heatmap(days, get, colorFn, fmt) {
+  function heatmap(days, get, colorFn, fmt, patFn) {
     const byDate = Object.fromEntries(days.map((d) => [d.date, d]));
     const end = new Date(days[days.length - 1].date + 'T12:00:00'), start = new Date(days[0].date + 'T12:00:00');
     start.setDate(start.getDate() - start.getDay());
@@ -145,7 +146,7 @@
       const dt = new Date(start); dt.setDate(dt.getDate() + w * 7 + r);
       if (dt > end) continue;
       const key = dt.toLocaleDateString('en-CA'), d = byDate[key], v = d ? get(d) : null;
-      s += `<rect x="${24 + w * (c + g)}" y="${r * (c + g)}" width="${c}" height="${c}" rx="4" fill="${v == null ? css('--line') : colorFn(v)}" opacity="${v == null ? 0.5 : 1}" data-tip="<b>${fmtDate(key)}</b><br>${v == null ? 'No data' : fmt(v)}"/>`;
+      s += `<rect x="${24 + w * (c + g)}" y="${r * (c + g)}" width="${c}" height="${c}" rx="4" fill="${v == null ? css('--line') : patFn && patFn(v) ? `url(#${patFn(v)})` : colorFn(v)}" opacity="${v == null ? 0.5 : 1}" data-tip="<b>${fmtDate(key)}</b><br>${v == null ? 'No data' : fmt(v)}"/>`;
     }
     return s + '</svg>';
   }

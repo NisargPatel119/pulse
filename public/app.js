@@ -9,6 +9,8 @@ const nonNull = (a) => a.filter((v) => v != null);
 
 const recColor = (r) => (r >= 67 ? css('--rec-hi') : r >= 34 ? css('--rec-mid') : css('--rec-lo'));
 const recWord = (r) => (r >= 67 ? 'Primed' : r >= 34 ? 'Moderate' : 'Take it easy');
+const recPat = (r) => (r < 34 ? 'p-low' : null);
+const recLegend = () => `<div class="legend"><span><i class="sw lv-hi"></i><b>Primed</b> 67–100</span><span><i class="sw lv-mid"></i><b>Moderate</b> 34–66</span><span><i class="sw lv-lo"></i><b>Low</b> 0–33</span></div>`;
 const scoreWord = (s) => (s >= 85 ? 'Excellent' : s >= 70 ? 'Good' : s >= 50 ? 'Fair' : 'Poor');
 
 const ICON = {
@@ -113,8 +115,8 @@ function viewSleep() {
   const n = sl.sleep, p = sl.sleepParts, plan = A().sleepPlan, tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const bar = (name, v, col) => `<div class="minibar"><span class="n">${name}</span><div class="meter"><i style="left:0;width:${v ?? 0}%;background:${col}"></i></div><span class="v">${v ?? '–'}${v != null ? '%' : ''}</span></div>`;
   const tot = (n.deep || 0) + (n.rem || 0) + (n.light || 0), awake = n.awake || 0, all = tot + awake || 1;
-  const seg = (m, col) => `<i style="width:${(m / all) * 100}%;background:var(${col})"></i>`;
-  const stageRow = (name, m, col, ideal) => { const pct = tot ? Math.round((m / tot) * 100) : null; return `<div class="minibar"><span class="n"><i style="display:inline-block;width:9px;height:9px;border-radius:3px;background:var(${col});margin-right:8px"></i>${name}</span><div class="meter"><i style="left:0;width:${pct ?? 0}%;background:var(${col})"></i></div><span class="v" style="width:auto;min-width:90px">${fmtH(m)} <span class="sub">${pct ?? '–'}%</span></span></div><div class="sub" style="margin:-6px 0 0 116px;font-size:12px">typical ${ideal}</div>`; };
+  const seg = (m, cls) => `<i class="${cls}" style="width:${(m / all) * 100}%"></i>`;
+  const stageRow = (name, m, col, ideal) => { const pct = tot ? Math.round((m / tot) * 100) : null; return `<div class="minibar"><span class="n"><i class="sw ${col}"></i>${name}</span><div class="meter"><i class="${col}" style="left:0;width:${pct ?? 0}%"></i></div><span class="v" style="width:auto;min-width:90px">${fmtH(m)} <span class="sub">${pct ?? '–'}%</span></span></div><div class="sub" style="margin:-6px 0 0 116px;font-size:12px">typical ${ideal}</div>`; };
   return `<div class="stack">${rangeSeg()}
   <div class="grid2">
     <div class="card"><h3>Sleep performance <small>${sl.date}</small></h3><div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap"><div style="width:150px">${C.ring({ value: sl.sleepScore, max: 100, color: css('--sleep'), color2: css('--sleep2'), text: sl.sleepScore + '%', size: 150, label: 'Sleep' })}</div>
@@ -125,8 +127,9 @@ function viewSleep() {
       <div class="kv"><div><small>Base need</small><b>${fmtH(plan.baseMin)}</b></div><div><small>Debt (7d)</small><b>${fmtH(plan.debtMin)}</b></div><div><small>Avg bedtime</small><b>${A().avgBedtime ?? '–'}</b></div><div><small>Variability</small><b>±${A().bedtimeSd ?? '–'}m</b></div></div></div>
   </div>
   <div class="card"><h3>Night timeline <small>tap a block</small></h3>${C.hypnogram(n)}
-    <div class="stagebar">${seg(n.deep || 0, '--deep')}${seg(n.rem || 0, '--rem')}${seg(n.light || 0, '--light')}${seg(awake, '--awake')}</div>
-    ${stageRow('Deep', n.deep || 0, '--deep', '13–23%')}${stageRow('REM', n.rem || 0, '--rem', '20–25%')}${stageRow('Light', n.light || 0, '--light', '45–55%')}</div>
+    <div class="stagebar">${seg(n.deep || 0, 'st-deep')}${seg(n.rem || 0, 'st-rem')}${seg(n.light || 0, 'st-light')}${seg(awake, 'st-awake')}</div>
+    <div class="legend" style="margin:0 0 6px"><span><i class="sw st-deep"></i>Deep</span><span><i class="sw st-rem"></i>REM</span><span><i class="sw st-light"></i>Light</span><span><i class="sw st-awake"></i>Awake</span></div>
+    ${stageRow('Deep', n.deep || 0, 'st-deep', '13–23%')}${stageRow('REM', n.rem || 0, 'st-rem', '20–25%')}${stageRow('Light', n.light || 0, 'st-light', '45–55%')}</div>
   <div class="grid2"><div class="card"><h3>Sleep per night <small>hours by stage</small></h3>${C.sleepStack(win(), plan.baseMin)}</div>
     <div class="card"><h3>Bed & wake times <small>consistency</small></h3>${C.sleepWindow(win(), tz)}</div></div>
   <div class="grid2"><div class="card"><h3>Sleep score</h3>${C.bars(win(), (d) => d.sleepScore, { min: 0, max: 100, color: css('--sleep'), unit: '%', label: 'sleep score' })}</div>
@@ -151,7 +154,7 @@ function viewRecovery() {
     <div class="card"><h3>Recovery <small>${rec.date}</small></h3><div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap"><div style="width:160px">${C.ring({ value: rec.recovery, max: 100, color: recColor(rec.recovery), text: rec.recovery + '%', size: 160, label: 'Recovery' })}</div><div style="flex:1;min-width:180px"><div class="chip ${rec.recovery >= 67 ? 'good' : rec.recovery >= 34 ? 'warn' : 'bad'}">${recWord(rec.recovery)}</div><p class="sub" style="margin:10px 0 0">Target strain <b style="color:var(--tx)">${a.targetStrain[0]}–${a.targetStrain[1]}</b> today.</p></div></div></div>
     <div class="card"><h3>What's driving it <small>vs your 28-day baseline</small></h3>${rec.contrib.length ? rec.contrib.map(contribRow).join('') : '<p class="sub">No contributors yet.</p>'}</div>
   </div>
-  <div class="card"><h3>Recovery score</h3>${C.bars(w, (d) => d.recovery, { min: 0, max: 100, colorFn: recColor, unit: '%', label: 'recovery score', wide: true })}</div>
+  <div class="card"><h3>Recovery score</h3>${recLegend()}${C.bars(w, (d) => d.recovery, { min: 0, max: 100, colorFn: recColor, patternFn: recPat, fmt: (v) => v + '% · ' + recWord(v), unit: '', label: 'recovery score', wide: true })}</div>
   <div class="grid2">${mini('Heart rate variability', 'hrv', css('--rec-hi'), 'ms', 0)}${mini('Resting heart rate', 'rhr', css('--rec-lo'), 'bpm', 0)}${mini('Respiratory rate', 'resp', css('--strain'), 'rpm', 1)}${mini('Blood oxygen', 'spo2', css('--sleep'), '%', 1)}${w.some((d) => d.temp != null) ? mini('Skin temperature', 'temp', css('--rec-mid'), '°C vs baseline', 2) : ''}${w.some((d) => d.vo2 != null) ? mini('VO₂ max', 'vo2', css('--accent'), 'ml/kg/min', 1) : ''}</div>
   <div class="card"><h3>What moves your recovery</h3>${drivers}</div></div>`;
 }
@@ -182,7 +185,7 @@ function viewTrends() {
   <div class="grid2"><div class="card"><h3>This week vs last <small>7-day averages</small></h3><table class="tbl"><thead><tr><th></th><th>This week</th><th>Last</th><th>Change</th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="card"><h3>Highlights</h3>${a.best ? `<div class="kv" style="grid-template-columns:1fr 1fr"><div><small>Best recovery</small><b style="color:var(--rec-hi)">${a.best.recovery}%</b><div class="sub" style="font-size:12px">${C.fmtDate(a.best.date)}</div></div><div><small>Lowest recovery</small><b style="color:var(--rec-lo)">${a.worst.recovery}%</b><div class="sub" style="font-size:12px">${C.fmtDate(a.worst.date)}</div></div></div>` : '<p class="sub">Highlights appear after a week of data.</p>'}
       <div class="kv" style="grid-template-columns:1fr 1fr"><div><small>Avg bedtime</small><b>${a.avgBedtime ?? '–'}</b></div><div><small>Bedtime variability</small><b>±${a.bedtimeSd ?? '–'}m</b></div></div></div></div>
-  <div class="card"><h3>Recovery calendar <small>green primed · amber moderate · red low</small></h3>${C.heatmap(days(), (d) => d.recovery, recColor, (v) => v + '% recovery')}</div>
+  <div class="card"><h3>Recovery calendar <small>blue primed · yellow moderate · hatched low</small></h3>${C.heatmap(days(), (d) => d.recovery, recColor, (v) => v + '% · ' + recWord(v), recPat)}${recLegend()}</div>
   <div class="grid2"><div class="card"><h3>HRV</h3>${C.line(w, (d) => d.hrv, { color: css('--rec-hi'), band: true, unit: ' ms' })}</div><div class="card"><h3>Resting heart rate</h3>${C.line(w, (d) => d.rhr, { color: css('--rec-lo'), band: true, unit: ' bpm' })}</div>
   <div class="card"><h3>Sleep duration</h3>${C.bars(w, (d) => (d.sleep?.asleep ? d.sleep.asleep / 60 : null), { color: css('--sleep'), ref: A().sleepPlan.baseMin / 60, refLabel: 'need', fmt: (v) => fmtH(v * 60), min: 0 })}</div><div class="card"><h3>Strain vs recovery</h3>${C.line(w, (d) => d.recovery, { color: css('--rec-hi'), unit: '% recovery', min: 0, max: 100 })}</div></div></div>`;
 }
