@@ -120,21 +120,25 @@ function normalizeSleep(dp) {
 }
 
 
+const durSec = (v) => { if (v == null) return null; const m = String(v).match(/([\d.]+)s/); return m ? Number(m[1]) : num(v); };
+
 export async function fetchDays(n = 35) {
-  const sinceDate = new Date(Date.now() - n * 864e5);
-  const since = sinceDate.toISOString(), sinceD = sinceDate.toLocaleDateString('en-CA');
+  const sinceDate = new Date(Date.now() - (n + 1) * 864e5);
+  const since = sinceDate.toISOString(), sinceD = sinceDate.toLocaleDateString('en-CA', { timeZone: TZ });
   const status = {};
   const run = async (name, fn) => { try { const v = await fn(); status[name] = { ok: true, count: v.length }; return v; } catch (e) { status[name] = { ok: false, error: e.message }; return []; } };
 
-  const [sleeps, rhr, hrv, spo2, resp, steps, azm, ex] = await Promise.all([
-    run('sleep', () => listAll('sleep', `sleep.interval.end_time >= "${since}"`, 25)),
+  const [sleeps, rhr, hrv, spo2, resp, steps, azm, ex, temp, vo2] = await Promise.all([
+    run('sleep', () => listAll('sleep', `sleep.interval.end_time >= "${since}"`, 25, 10)),
     run('resting-heart-rate', () => listAll('daily-resting-heart-rate', `daily_resting_heart_rate.date >= "${sinceD}"`, 100)),
     run('heart-rate-variability', () => listAll('daily-heart-rate-variability', `daily_heart_rate_variability.date >= "${sinceD}"`, 100)),
     run('oxygen-saturation', () => listAll('daily-oxygen-saturation', `daily_oxygen_saturation.date >= "${sinceD}"`, 100)),
     run('respiratory-rate', () => listAll('daily-respiratory-rate', `daily_respiratory_rate.date >= "${sinceD}"`, 100)),
-    run('steps', () => listAll('steps', `steps.interval.start_time >= "${new Date(Date.now() - 14 * 864e5).toISOString()}"`, 10000, 6)),
-    run('active-zone-minutes', () => listAll('active-zone-minutes', `active_zone_minutes.interval.start_time >= "${since}"`, 10000, 6)),
-    run('exercise', () => listAll('exercise', `exercise.interval.civil_start_time >= "${sinceD}"`, 25, 4)),
+    run('steps', () => listAll('steps', `steps.interval.start_time >= "${since}"`, 10000, 8)),
+    run('active-zone-minutes', () => listAll('active-zone-minutes', `active_zone_minutes.interval.start_time >= "${since}"`, 10000, 8)),
+    run('exercise', () => listAll('exercise', `exercise.interval.civil_start_time >= "${sinceD}"`, 25, 8)),
+    run('skin-temperature', () => listAll('daily-sleep-temperature-derivations', `daily_sleep_temperature_derivations.date >= "${sinceD}"`, 100)),
+    run('vo2-max', () => listAll('vo2-max', `vo2_max.sample_time.physical_time >= "${since}"`, 100, 2)),
   ]);
 
   const byDate = {};
@@ -145,19 +149,38 @@ export async function fetchDays(n = 35) {
   daily(hrv, 'hrv', ['averageHeartRateVariabilityMilliseconds', 'heartRateVariabilityMilliseconds', 'rmssd', 'dailyRmssd', 'average']);
   daily(spo2, 'spo2', ['averagePercentage', 'average', 'percentage', 'value']);
   daily(resp, 'resp', ['breathsPerMinute', 'averageBreathsPerMinute', 'fullSleepBreathsPerMinute', 'value']);
+  daily(temp, 'temp', ['nightlyTemperatureDeviationCelsius', 'temperatureDeviationCelsius', 'deviationCelsius', 'relativeNightlyTemperatureCelsius', 'nightlyRelative', 'value']);
+  for (const dp of vo2) { const t = pick(dp, ['physicalTime', 'sampleTime', 'time']); const v = num(pick(dp, ['vo2Max', 'vo2MaxMlPerKgPerMin', 'value'])); if (t && v != null) get(localDate(t)).vo2 = v; }
+
+  // Sums only count whole days: the oldest (partial) day in the window is skipped
   const sumBy = (pts, key, keys) => {
     for (const dp of pts) {
       const t = pick(dp, ['startTime', 'start_time']); const v = num(pick(dp, keys));
-      if (t && v != null) { const d = get(localDate(t)); d[key] = (d[key] || 0) + v; }
+      if (!t || v == null) continue;
+      const date = localDate(t);
+      if (date <= sinceD) continue;
+      const d = get(date); d[key] = (d[key] || 0) + v;
     }
   };
   sumBy(steps, 'steps', ['count', 'steps']);
   sumBy(azm, 'azm', ['totalMinutes', 'activeZoneMinutes', 'minutes', 'count']);
-  for (const dp of ex) {
-    const t = pick(dp, ['startTime', 'start_time']), e = pick(dp, ['endTime', 'end_time']);
-    if (t && e) { const d = get(localDate(t)); d.exMin = (d.exMin || 0) + Math.round((new Date(e) - new Date(t)) / 60000); }
-  }
-  const days = Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date));
-  return { days, status, sample: { sleep: sleeps[0], hrv: hrv[0], rhr: rhr[0], steps: steps[0] } };
-}
 
+  for (const dp of ex) {
+    const e = dp.exercise || dp;
+    const t = pick(e, ['startTime', 'start_time']), en = pick(e, ['endTime', 'end_time']);
+    if (!t) continue;
+    const sec = durSec(pick(e, ['activeDuration'])) ?? (en ? (new Date(en) - new Date(t)) / 1000 : null);
+    const dist = num(pick(e, ['distanceMillimeters']));
+    const w = {
+      name: pick(e, ['displayName']) || String(pick(e, ['exerciseType']) || 'Workout').toLowerCase().replace(/_/g, ' '),
+      type: String(pick(e, ['exerciseType']) || ''), start: t, min: sec ? Math.round(sec / 60) : null,
+      kcal: num(pick(e, ['caloriesKcal'])), avgHr: num(pick(e, ['averageHeartRateBeatsPerMinute'])), azm: num(pick(e, ['activeZoneMinutes'])),
+      km: dist != null ? Math.round(dist / 10) / 100 : null,
+    };
+    (get(localDate(t)).workouts ??= []).push(w);
+  }
+  for (const d of Object.values(byDate)) if (d.workouts) { d.workouts.sort((a, b) => a.start.localeCompare(b.start)); d.exMin = d.workouts.reduce((s, w) => s + (w.min || 0), 0); }
+
+  const days = Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date));
+  return { days, status, sample: { sleep: sleeps[0] && { ...sleeps[0], sleep: { ...sleeps[0].sleep, stages: '…' } }, hrv: hrv[0], rhr: rhr[0], temp: temp[0], exercise: ex[0] } };
+}

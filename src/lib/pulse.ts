@@ -1,6 +1,6 @@
 import { loadDays, saveDays, getKv, setKv } from './db';
 import { connected, fetchDays } from './health';
-import { enrich, insights } from './scores';
+import { enrich, insights, analytics } from './scores';
 import { demoDays } from './demo';
 
 export const isDemoDeployment = () => process.env.DEMO_MODE === 'true' || process.env.DEMO_MODE === '1';
@@ -12,9 +12,11 @@ export async function getPrefs() {
 }
 export const setPrefs = async (p: object) => setKv('prefs', { ...(await getPrefs()), ...p });
 
-// Pull the latest from Google Health and merge it into Postgres
+// Pull the latest from Google Health and merge it into Postgres.
+// First sync backfills 90 days; later syncs only refresh the last 10.
 export async function sync() {
-  const { days, status, sample } = await fetchDays(35);
+  const have = (await loadDays(90)).length;
+  const { days, status, sample } = await fetchDays(have >= 30 ? 10 : 90);
   await saveDays(days as { date: string }[]);
   const meta = { fetchedAt: new Date().toISOString(), status, sample };
   await setKv('sync_meta', meta);
@@ -30,7 +32,7 @@ export async function payload({ refresh = false, demo = false } = {}) {
   const prefs = await getPrefs();
   let days, source = 'fitbit', meta: any = {};
   if (demo || !(await isConnected())) {
-    days = demoDays(45);
+    days = demoDays(90);
     source = 'demo';
     meta = { fetchedAt: new Date().toISOString() };
   } else {
@@ -41,5 +43,10 @@ export async function payload({ refresh = false, demo = false } = {}) {
     days = await loadDays(90);
   }
   enrich(days, prefs);
-  return { source, fetchedAt: meta.fetchedAt, prefs, days, insights: insights(days, prefs), status: meta.status ?? {}, sample: meta.sample };
+  return {
+    source, fetchedAt: meta.fetchedAt, prefs, days,
+    insights: insights(days, prefs), analytics: analytics(days, prefs),
+    status: meta.status ?? {}, sample: meta.sample,
+    aiEnabled: !!process.env.GROQ_API_KEY,
+  };
 }

@@ -25,7 +25,10 @@ function demoDays(n = 45) {
     const hrv = 55 + (asleepTarget - 7) * 8 - fatigue * 3 + (r() - 0.5) * 8;
     const rhr = 56 - (asleepTarget - 7) * 1.2 + fatigue * 0.8 + (r() - 0.5) * 3;
     fatigue = Math.max(0, fatigue * 0.6 + (steps / 15000 + azm / 60 + exMin / 70) - 1);
-    const ill = i < 2 && n > 30; // last two days: slightly off, to trigger insights
+    const ill = i < 2 && n > 30;
+    const names = ['Run','Weights','Cycling','Walk','HIIT'];
+    const wname = names[Math.floor(r() * names.length)];
+    const wstart = new Date(day); wstart.setHours(7 + Math.floor(r() * 11), 0, 0, 0); // last two days: slightly off, to trigger insights
     days.push({
       date,
       sleep: { asleep, awake: inBed - asleep, inBed, deep, rem, light: asleep - deep - rem, latency: Math.round(8 + r() * 15), start: start.toISOString(), end: end.toISOString(), stages: demoStages(start, asleep, deep, rem, inBed, r) },
@@ -34,6 +37,9 @@ function demoDays(n = 45) {
       spo2: Math.round((96 + r() * 2.2 - (ill ? 2 : 0)) * 10) / 10,
       resp: Math.round((14.5 + r() * 1.2 + (ill ? 1.4 : 0)) * 10) / 10,
       steps, azm, exMin,
+      temp: Math.round(((r() - 0.5) * 0.6 + (ill ? 1 : 0)) * 100) / 100,
+      vo2: i % 15 === 0 ? Math.round((44 + r() * 2) * 10) / 10 : undefined,
+      workouts: exMin ? [{ name: wname, type: wname.toUpperCase(), start: wstart.toISOString(), min: exMin, kcal: Math.round(exMin * (6 + r() * 5)), avgHr: Math.round(120 + r() * 40), azm: Math.round(exMin * (0.5 + r() * 0.8)), km: wname === 'Run' || wname === 'Cycling' || wname === 'Walk' ? Math.round(exMin * (0.1 + r() * 0.1) * 100) / 100 : null }] : undefined,
     });
   }
   return days;

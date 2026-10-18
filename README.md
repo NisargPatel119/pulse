@@ -21,9 +21,16 @@ Bevel reads Apple Health, which only exists on-device, so it needs a native iPho
 Data syncs when you open the app (if older than 30 min), on **Refresh**, and daily at 11:00 UTC via Vercel Cron.
 
 ## What you get
-- **Recovery** (HRV, resting HR, respiration, SpO2, sleep vs your own 28-day baseline), **Sleep** score vs your sleep need, **Strain** 0-21.
-- **Proactive insights:** daily training call, sleep debt, bedtime consistency, deep/REM flags, HRV trends, illness/overreach warnings, low SpO2, personal sleep-to-recovery patterns, tonight's bedtime target.
+Six tabs, built to work as well on your iPhone as on a laptop:
+- **Today:** Recovery, Sleep and Strain rings, an AI-written morning briefing (optional), today's target strain, tonight's bedtime plan, and your top insights.
+- **Sleep:** performance score broken into duration, efficiency, restorative and consistency; stage timeline; sleep-need plan with debt; bed and wake times; per-night stage charts.
+- **Recovery:** what is driving your score (HRV, resting HR, respiration, SpO2, skin temperature vs your 28-day baseline), trend charts with baseline bands, and **what moves your recovery** (correlations from your own data).
+- **Activity:** strain, steps, active zone minutes, the 150-minute weekly goal, and a workout log.
+- **Trends:** 7/30/90-day ranges, this week vs last, a recovery calendar, highlights.
+- **Coach (optional AI):** a daily briefing and chat that answers questions using your real numbers. Add a free `GROQ_API_KEY` (console.groq.com/keys) in Vercel and redeploy. Without it everything else still works.
+
+Insights are generated automatically: daily training call, sleep debt, bedtime consistency, deep/REM flags, HRV trends, illness/overreach warnings, low SpO2, activity goals and personal patterns.
 
 ## Notes
-- Google Health API response shapes were only partly documented, so field extraction is tolerant. After connecting, open **Data connection details** at the bottom of the dashboard: a metric with an error or 0 records shows what to adjust in `src/lib/health.ts`. `/api/raw?p=/users/me/dataTypes/sleep/dataPoints?pageSize=1` (signed in) shows raw responses.
+- Google Health API response shapes were only partly documented, so field extraction is tolerant. After connecting, open **Data connection details** at the bottom of the dashboard: a metric with an error or 0 records shows what to adjust in `src/lib/health.ts`. Set `PULSE_TZ` (e.g. `America/Los_Angeles`) if you are not on US Eastern time. `/api/raw?p=/users/me/dataTypes/sleep/dataPoints?pageSize=1` (signed in) shows raw responses.
 - Scores are estimates, not Whoop's algorithms, and not medical advice. One user, one password per deployment.

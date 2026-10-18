@@ -7,37 +7,38 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Pulse">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#0e1013">
+<meta name="theme-color" content="#0a0b0e">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/apple-icon">
 <title>Pulse</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header>
-  <h1>Pulse</h1>
-  <span id="badge" class="badge"></span>
-  <div class="spacer"></div>
-  <label class="need">Sleep need <input id="need" type="number" min="5" max="11" step="0.25"> h</label>
-  <button id="refresh">Refresh</button>
-  <form id="signout" method="post" action="/api/logout"><button>Sign out</button></form>
-  <a id="connect" class="btn" href="/api/connect">Connect Fitbit</a>
-</header>
-<main>
-  <div id="setup" class="card hidden"></div>
-  <section class="rings" id="rings"></section>
-  <section class="card"><h2>Insights for you</h2><div id="insights"></div></section>
-  <section class="grid">
-    <div class="card"><h2>Last night</h2><div id="night"></div></div>
-    <div class="card"><h2>Recovery <small>30 days</small></h2><div id="c-rec"></div></div>
-    <div class="card"><h2>HRV <small>ms · band = your baseline</small></h2><div id="c-hrv"></div></div>
-    <div class="card"><h2>Resting heart rate <small>bpm</small></h2><div id="c-rhr"></div></div>
-    <div class="card"><h2>Sleep stages <small>hours</small></h2><div id="c-sleep"></div></div>
-    <div class="card"><h2>Strain <small>0-21</small></h2><div id="c-strain"></div></div>
-  </section>
-  <details class="card"><summary>Data connection details</summary><div id="diag"></div></details>
-  <p class="foot">Wellness estimates for personal use, not medical advice. Data stays on your computer.</p>
-</main>
+<div class="shell">
+  <nav id="nav" aria-label="Sections"></nav>
+  <div class="content">
+    <header class="top">
+      <div>
+        <div class="eyebrow" id="date"></div>
+        <h1 id="title">Today</h1>
+      </div>
+      <div class="top-actions">
+        <span id="badge" class="badge"></span>
+        <button id="refresh" class="icon-btn" aria-label="Refresh data" title="Refresh"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.5-5.8M20 4v5h-5"/></svg></button>
+        <button id="gear" class="icon-btn" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+      </div>
+    </header>
+    <div id="banner" class="banner hidden"></div>
+    <main id="view" aria-live="polite"></main>
+    <p class="foot">Wellness estimates for personal use, not medical advice. Your data stays in your own database.</p>
+  </div>
+</div>
+<div id="tip" class="tip hidden" role="tooltip"></div>
+<dialog id="settings">
+  <form method="dialog" class="sheet-head"><h2>Settings</h2><button class="icon-btn" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></form>
+  <div class="sheet-body" id="settings-body"></div>
+</dialog>
+<script src="charts.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
