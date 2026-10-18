@@ -92,15 +92,20 @@ const dateOf = (dp) => {
   if (o && o.year) return `${o.year}-${String(o.month).padStart(2, '0')}-${String(o.day).padStart(2, '0')}`;
   return null;
 };
-const localDate = (iso) => new Date(iso).toLocaleDateString('en-CA');
+export const TZ = process.env.PULSE_TZ || 'America/New_York';
+const localDate = (iso) => new Date(iso).toLocaleDateString('en-CA', { timeZone: TZ });
 
 function normalizeSleep(dp) {
   const s = dp.sleep || dp;
   const start = pick(s, ['startTime', 'start_time']), end = pick(s, ['endTime', 'end_time']);
   if (!start || !end) return null;
-  const stagesArr = s.stages || s.sleepStages || s.levels?.data || [];
+  const rawStages = s.stages || s.sleepStages || s.levels?.data || [];
+  const stagesArr = rawStages.map((x, i) => ({ ...x, endTime: x.endTime || (x.seconds ? new Date(new Date(x.dateTime).getTime() + x.seconds * 1000).toISOString() : rawStages[i + 1]?.startTime || end) }));
   const sum = {};
   for (const st of s.stagesSummary || s.summary?.stagesSummary || []) sum[String(st.type || st.stage).toUpperCase()] = num(st.minutes ?? st.minutesInStage ?? st.count);
+  const typeMin = {};
+  for (const x of stagesArr) { const k = String(x.type || x.level || '').toUpperCase(); const st = x.startTime || x.dateTime; if (st && x.endTime) typeMin[k] = (typeMin[k] || 0) + (new Date(x.endTime) - new Date(st)) / 60000; }
+  for (const k of ['DEEP', 'REM', 'LIGHT']) if (sum[k] == null && typeMin[k] != null) sum[k] = Math.round(typeMin[k]);
   const asleep = num(pick(s, ['minutesAsleep'])), awake = num(pick(s, ['minutesAwake']));
   const inBed = num(pick(s, ['minutesInSleepPeriod'])) ?? (asleep != null && awake != null ? asleep + awake : Math.round((new Date(end) - new Date(start)) / 60000));
   return {
@@ -122,14 +127,14 @@ export async function fetchDays(n = 35) {
   const run = async (name, fn) => { try { const v = await fn(); status[name] = { ok: true, count: v.length }; return v; } catch (e) { status[name] = { ok: false, error: e.message }; return []; } };
 
   const [sleeps, rhr, hrv, spo2, resp, steps, azm, ex] = await Promise.all([
-    run('sleep', () => listAll('sleep', `sleep.interval.start_time >= "${since}"`, 25)),
+    run('sleep', () => listAll('sleep', `sleep.interval.end_time >= "${since}"`, 25)),
     run('resting-heart-rate', () => listAll('daily-resting-heart-rate', `daily_resting_heart_rate.date >= "${sinceD}"`, 100)),
     run('heart-rate-variability', () => listAll('daily-heart-rate-variability', `daily_heart_rate_variability.date >= "${sinceD}"`, 100)),
     run('oxygen-saturation', () => listAll('daily-oxygen-saturation', `daily_oxygen_saturation.date >= "${sinceD}"`, 100)),
     run('respiratory-rate', () => listAll('daily-respiratory-rate', `daily_respiratory_rate.date >= "${sinceD}"`, 100)),
     run('steps', () => listAll('steps', `steps.interval.start_time >= "${new Date(Date.now() - 14 * 864e5).toISOString()}"`, 10000, 6)),
     run('active-zone-minutes', () => listAll('active-zone-minutes', `active_zone_minutes.interval.start_time >= "${since}"`, 10000, 6)),
-    run('exercise', () => listAll('exercise', `exercise.interval.start_time >= "${since}"`, 25, 4)),
+    run('exercise', () => listAll('exercise', `exercise.interval.civil_start_time >= "${sinceD}"`, 25, 4)),
   ]);
 
   const byDate = {};

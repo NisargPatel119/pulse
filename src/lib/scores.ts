@@ -155,15 +155,19 @@ function insights(days, prefs) {
   return out.sort((a, b) => (a.tag === 'today' ? -1 : b.tag === 'today' ? 1 : order[a.level] - order[b.level]));
 }
 
+const TZ = process.env.PULSE_TZ || 'America/New_York';
+function hm(iso) {
+  const p = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date(iso));
+  return (+p.find((x) => x.type === 'hour').value % 24) * 60 + +p.find((x) => x.type === 'minute').value;
+}
 function bedMinutes(iso) {
-  const d = new Date(iso);
-  let m = d.getHours() * 60 + d.getMinutes();
+  let m = hm(iso);
   if (m < 12 * 60) m += 24 * 60;
   return m;
 }
 
 function targetBed(days, need) {
-  const wakes = days.slice(-7).filter((d) => d.sleep?.end).map((d) => { const e = new Date(d.sleep.end); return e.getHours() * 60 + e.getMinutes(); });
+  const wakes = days.slice(-7).filter((d) => d.sleep?.end).map((d) => { return hm(d.sleep.end); });
   const wake = mean(wakes) ?? 7 * 60;
   const lat = mean(days.slice(-7).map((d) => d.sleep?.latency)) ?? 15;
   let bed = Math.round(wake - need - lat - 20);
