@@ -60,7 +60,7 @@ function md(text) {
 // ---------- shared pieces ----------
 function insightsList(items, limit) {
   const shown = limit ? items.slice(0, limit) : items;
-  return shown.map((i) => { const [c, ic] = LEVEL[i.level]; return `<div class="ins" style="--c:var(${c})"><div class="ico">${svg(ic)}</div><div><b>${esc(i.title)}<span class="tg">${esc(i.tag)}</span></b><p>${esc(i.body)}</p></div></div>`; }).join('');
+  return shown.map((i) => { const [c, ic] = LEVEL[i.level]; return `<div class="ins" style="--c:var(${c})"><div class="ico">${svg(ic)}</div><div class="insb"><b>${esc(i.title)}<span class="tg">${esc(i.tag)}</span></b><p>${esc(i.why || i.body)}</p>${i.steps?.length ? `<div class="dolabel">What to do</div><ul class="steps">${i.steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ul>` : ''}</div></div>`; }).join('');
 }
 function ringCard(go, label, ringOpts, status, glow) {
   return `<div class="herocard" data-go="${go}" style="--glow:${glow}" role="link" tabindex="0">${C.ring({ ...ringOpts, label })}<div class="lab">${label}</div><div class="st">${status}</div></div>`;
@@ -96,7 +96,7 @@ function viewToday() {
     ${t?.workouts?.length ? t.workouts.map(wkRow).join('') : '<p class="sub" style="margin:12px 0 0">No workouts logged today.</p>'}</div>`;
 
   const items = S.data.insights;
-  const ins = `<div class="card"><h3>Insights for you <small>${items.length} active</small></h3>${items.length ? insightsList(items, S.allInsights ? 0 : 5) : '<p class="sub">Insights appear once a few days of data have synced.</p>'}${items.length > 5 ? `<button class="more" id="moreIns">${S.allInsights ? 'Show less' : `Show all ${items.length}`}</button>` : ''}</div>`;
+  const ins = `<div class="card"><h3>Insights for you <small>${items.length} active</small></h3>${items.length ? insightsList(items, S.allInsights ? 0 : 4) : '<p class="sub">Insights appear once a few days of data have synced.</p>'}${items.length > 4 ? `<button class="more" id="moreIns">${S.allInsights ? 'Show less' : `Show all ${items.length}`}</button>` : ''}</div>`;
 
   const n = sl?.sleep, nightCard = n ? `<div class="card"><h3>Last night <small>${sl.date}</small></h3>${C.hypnogram(n)}<div class="kv"><div><small>Asleep</small><b>${fmtH(n.asleep)}</b></div><div><small>Deep</small><b>${fmtH(n.deep)}</b></div><div><small>REM</small><b>${fmtH(n.rem)}</b></div><div><small>HRV</small><b>${sl.hrv ?? '–'} ms</b></div><div><small>Resting HR</small><b>${sl.rhr ?? '–'}</b></div></div></div>` : '';
   return `<div class="stack">${hero}${brief}<div class="grid2">${strain}${tonight}</div>${ins}${nightCard}</div>`;
@@ -210,7 +210,8 @@ function render() {
   if (!S.data) return;
   const hour = new Date().getHours();
   $('title').textContent = S.view === 'today' ? (hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening') : VIEWS.find(([k]) => k === S.view)[1];
-  $('date').textContent = new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+  const sync = S.data.source === 'demo' ? 'Demo data' : 'Synced ' + tf(S.data.fetchedAt);
+  $('date').textContent = new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' }) + (matchMedia('(max-width:860px)').matches ? ' · ' + sync : '');
   $('badge').textContent = S.data.source === 'demo' ? 'Demo data' : 'Synced ' + tf(S.data.fetchedAt);
   $('badge').className = 'badge' + (S.data.source === 'demo' ? ' demo' : '');
   renderNav();
@@ -305,3 +306,7 @@ document.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'mouse')
 document.addEventListener('scroll', () => tip.classList.add('hidden'), { passive: true });
 
 load();
+
+// re-render when crossing the phone/desktop breakpoint (charts pick their size at render time)
+let wasNarrow = innerWidth < 700, rt;
+addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { const n = innerWidth < 700; if (n !== wasNarrow) { wasNarrow = n; render(); } }, 200); });

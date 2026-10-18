@@ -8,10 +8,12 @@ function demoDays(n = 45) {
   const now = new Date();
   now.setHours(0, 0, 0, 0);
   let fatigue = 0;
+  let prevLate = false;
   for (let i = n - 1; i >= 0; i--) {
     const day = new Date(now); day.setDate(day.getDate() - i);
     const date = day.toLocaleDateString('en-CA');
-    const bedOffset = Math.round((r() - 0.5) * 90);
+    const wkend = [5, 6].includes(day.getDay());
+    const bedOffset = Math.round((r() - 0.5) * 90) + (wkend ? 60 : 0);
     const asleepTarget = 6.2 + r() * 2.2;
     const asleep = Math.round(asleepTarget * 60);
     const inBed = Math.round(asleep * (1.08 + r() * 0.08));
@@ -22,16 +24,18 @@ function demoDays(n = 45) {
     const steps = Math.round(4000 + r() * 11000);
     const azm = Math.round(r() * 60);
     const exMin = r() > 0.5 ? Math.round(20 + r() * 50) : 0;
-    const hrv = 55 + (asleepTarget - 7) * 8 - fatigue * 3 + (r() - 0.5) * 8;
+    const hrv = 55 + (asleepTarget - 7) * 8 - fatigue * 3 - bedOffset * 0.3 + (r() - 0.5) * 8;
     const rhr = 56 - (asleepTarget - 7) * 1.2 + fatigue * 0.8 + (r() - 0.5) * 3;
     fatigue = Math.max(0, fatigue * 0.6 + (steps / 15000 + azm / 60 + exMin / 70) - 1);
     const ill = i < 2 && n > 30;
     const names = ['Run','Weights','Cycling','Walk','HIIT'];
     const wname = names[Math.floor(r() * names.length)];
-    const wstart = new Date(day); wstart.setHours(7 + Math.floor(r() * 11), 0, 0, 0); // last two days: slightly off, to trigger insights
+    const wstartHour = 7 + Math.floor(r() * 14);
+    const wstart = new Date(day); wstart.setHours(wstartHour, 0, 0, 0); // last two days: slightly off, to trigger insights
+    const lateToday = !!exMin && wstartHour >= 19;
     days.push({
       date,
-      sleep: { asleep, awake: inBed - asleep, inBed, deep, rem, light: asleep - deep - rem, latency: Math.round(8 + r() * 15), start: start.toISOString(), end: end.toISOString(), stages: demoStages(start, asleep, deep, rem, inBed, r) },
+      sleep: { asleep, awake: inBed - asleep, inBed, deep, rem, light: asleep - deep - rem, latency: Math.round(8 + r() * 15 + (prevLate ? 14 : 0)), start: start.toISOString(), end: end.toISOString(), stages: demoStages(start, asleep, deep, rem, inBed, r) },
       hrv: Math.round((hrv - (ill ? 9 : 0)) * 10) / 10,
       rhr: Math.round((rhr + (ill ? 5 : 0)) * 10) / 10,
       spo2: Math.round((96 + r() * 2.2 - (ill ? 2 : 0)) * 10) / 10,
@@ -41,6 +45,7 @@ function demoDays(n = 45) {
       vo2: i % 15 === 0 ? Math.round((44 + r() * 2) * 10) / 10 : undefined,
       workouts: exMin ? [{ name: wname, type: wname.toUpperCase(), start: wstart.toISOString(), min: exMin, kcal: Math.round(exMin * (6 + r() * 5)), avgHr: Math.round(120 + r() * 40), azm: Math.round(exMin * (0.5 + r() * 0.8)), km: wname === 'Run' || wname === 'Cycling' || wname === 'Walk' ? Math.round(exMin * (0.1 + r() * 0.1) * 100) / 100 : null }] : undefined,
     });
+    prevLate = lateToday;
   }
   return days;
 }

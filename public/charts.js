@@ -9,7 +9,7 @@
   let uid = 0;
 
   function frame(days, vals, o) {
-    const W = o.wide ? 1100 : 600, H = o.h || (o.wide ? 190 : 170), p = { l: 34, r: 10, t: 10, b: 24 };
+    const narrow = innerWidth < 700, W = o.wide && !narrow ? 1100 : 600, H = o.h || (o.wide && !narrow ? 190 : 170), p = { l: narrow ? 40 : 34, r: 10, t: 10, b: 26 };
     const v = vals.filter((x) => x != null && isFinite(x));
     let lo = o.min ?? Math.min(...v), hi = o.max ?? Math.max(...v);
     if (o.min == null) { const pad = (hi - lo) * 0.15 || 1; lo -= pad; hi += pad; if (lo < 0 && Math.min(...v) >= 0) lo = 0; }
