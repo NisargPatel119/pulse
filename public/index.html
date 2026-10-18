@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Pulse">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0e1013">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/apple-icon">
+<title>Pulse</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>Pulse</h1>
+  <span id="badge" class="badge"></span>
+  <div class="spacer"></div>
+  <label class="need">Sleep need <input id="need" type="number" min="5" max="11" step="0.25"> h</label>
+  <button id="refresh">Refresh</button>
+  <form id="signout" method="post" action="/api/logout"><button>Sign out</button></form>
+  <a id="connect" class="btn" href="/api/connect">Connect Fitbit</a>
+</header>
+<main>
+  <div id="setup" class="card hidden"></div>
+  <section class="rings" id="rings"></section>
+  <section class="card"><h2>Insights for you</h2><div id="insights"></div></section>
+  <section class="grid">
+    <div class="card"><h2>Last night</h2><div id="night"></div></div>
+    <div class="card"><h2>Recovery <small>30 days</small></h2><div id="c-rec"></div></div>
+    <div class="card"><h2>HRV <small>ms · band = your baseline</small></h2><div id="c-hrv"></div></div>
+    <div class="card"><h2>Resting heart rate <small>bpm</small></h2><div id="c-rhr"></div></div>
+    <div class="card"><h2>Sleep stages <small>hours</small></h2><div id="c-sleep"></div></div>
+    <div class="card"><h2>Strain <small>0-21</small></h2><div id="c-strain"></div></div>
+  </section>
+  <details class="card"><summary>Data connection details</summary><div id="diag"></div></details>
+  <p class="foot">Wellness estimates for personal use, not medical advice. Data stays on your computer.</p>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
