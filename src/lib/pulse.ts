@@ -19,7 +19,8 @@ export async function sync() {
   const have = (await loadDays(200)).length;
   const prev: any = await getKv('sync_meta');
   const full = have < 30 || !(prev?.backfill >= 180); // one-time deeper backfill for existing installs
-  const { days, status, sample } = await fetchDays(full ? 180 : 10);
+  const age = Number((await getPrefs()).age);
+  const { days, status, sample } = await fetchDays(full ? 180 : 10, { hrDays: full ? 30 : 7, hrMax: age >= 16 && age <= 100 ? 208 - 0.7 * age : null });
   await saveDays(days as { date: string }[]);
   const meta = { fetchedAt: new Date().toISOString(), status, sample, backfill: full ? 180 : prev?.backfill };
   await setKv('sync_meta', meta);

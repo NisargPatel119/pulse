@@ -122,13 +122,87 @@ function normalizeSleep(dp) {
 
 const durSec = (v) => { if (v == null) return null; const m = String(v).match(/([\d.]+)s/); return m ? Number(m[1]) : num(v); };
 
-export async function fetchDays(n = 35) {
+// ---- intraday heart rate -> zones, HR-based strain (TRIMP) and daytime stress (no manual input) ----
+const ZONE_W = [0.4, 1.5, 3, 5, 7]; // Edwards-style TRIMP weights for zones 1-5 (50-60 ... 90-100% of max HR)
+const hourFmt = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', hour12: false });
+const dateFmt = new Intl.DateTimeFormat('en-CA', { timeZone: TZ });
+const zoneOf = (bpm, hrMax) => { const p = bpm / hrMax; return p >= 0.9 ? 4 : p >= 0.8 ? 3 : p >= 0.7 ? 2 : p >= 0.6 ? 1 : p >= 0.5 ? 0 : -1; };
+
+function processHeart(hrPts, stepsPts, byDate, hrMaxEst) {
+  const smp = [];
+  for (const dp of hrPts) {
+    const t = pick(dp, ['physicalTime', 'sampleTime', 'time']);
+    const b = num(pick(dp, ['beatsPerMinute', 'bpm', 'value']));
+    if (t && b != null && b > 30 && b < 230) smp.push([Date.parse(t), b]);
+  }
+  if (smp.length < 100) return 0;
+  smp.sort((x, y) => x[0] - y[0]);
+  const bpms = smp.map((s) => s[1]).sort((x, y) => x - y);
+  const hrMax = hrMaxEst || Math.max(170, bpms[Math.floor(bpms.length * 0.995)]);
+
+  // minutes with steps = "active"; sedentary samples are those with no activity within +/-5 minutes
+  const active = new Set();
+  for (const dp of stepsPts) {
+    const t = pick(dp, ['startTime', 'start_time']), e = pick(dp, ['endTime', 'end_time']), v = num(pick(dp, ['count', 'steps']));
+    if (!t || !v) continue;
+    const a = Math.floor(Date.parse(t) / 60000), b = e ? Math.floor(Date.parse(e) / 60000) : a;
+    for (let m = a; m <= Math.min(b, a + 30); m++) active.add(m);
+  }
+  const nearActive = (ms) => { const m = Math.floor(ms / 60000); for (let k = -5; k <= 5; k++) if (active.has(m + k)) return true; return false; };
+
+  const per = {};
+  for (let i = 0; i < smp.length - 1; i++) {
+    const [t, bpm] = smp[i], gap = smp[i + 1][0] - t;
+    const dt = gap <= 5 * 60000 ? gap / 60000 : 0;
+    if (!dt) continue;
+    const date = dateFmt.format(t);
+    const a = (per[date] ??= { z: [0, 0, 0, 0, 0], sum: 0, w: 0, max: 0, sedSum: 0, sedW: 0, hs: Array(24).fill(0), hw: Array(24).fill(0) });
+    const z = zoneOf(bpm, hrMax);
+    if (z >= 0) a.z[z] += dt;
+    a.sum += bpm * dt; a.w += dt; if (bpm > a.max) a.max = bpm;
+    const h = Number(hourFmt.format(t)) % 24;
+    if (h >= 7 && h < 22 && !nearActive(t)) {
+      const rest = byDate[date]?.rhr ?? 62, elev = bpm - rest;
+      a.sedSum += elev * dt; a.sedW += dt; a.hs[h] += elev * dt; a.hw[h] += dt;
+    }
+  }
+  const dates = Object.keys(per).sort();
+  const level = (elev) => Math.round(Math.min(3, Math.max(0, (elev - 3) / 8)) * 10) / 10;
+  dates.slice(1).forEach((date) => { // the oldest date may be partial
+    const a = per[date], d = (byDate[date] ??= { date });
+    d.hrz = a.z.map((m) => Math.round(m * 10) / 10);
+    d.trimp = Math.round(a.z.reduce((s, m, i) => s + m * ZONE_W[i], 0));
+    d.hrAvg = a.w ? Math.round(a.sum / a.w) : null;
+    d.hrMax = Math.round(a.max);
+    if (a.sedW >= 30) { d.stress = level(a.sedSum / a.sedW); d.sedMin = Math.round(a.sedW); d.stressHours = a.hs.map((s, h) => (a.hw[h] >= 3 ? level(s / a.hw[h]) : null)); }
+  });
+
+  // per-workout zones and average heart rate
+  for (const d of Object.values(byDate)) for (const w of d.workouts || []) {
+    if (!w.start || !w.min) continue;
+    const a = Date.parse(w.start), b = a + w.min * 60000, z = [0, 0, 0, 0, 0];
+    let sum = 0, wt = 0, mx = 0;
+    for (let i = 0; i < smp.length - 1; i++) {
+      const [t, bpm] = smp[i];
+      if (t < a || t > b) continue;
+      const gap = smp[i + 1][0] - t, dt = gap <= 5 * 60000 ? gap / 60000 : 0;
+      if (!dt) continue;
+      const zi = zoneOf(bpm, hrMax); if (zi >= 0) z[zi] += dt;
+      sum += bpm * dt; wt += dt; if (bpm > mx) mx = bpm;
+    }
+    if (wt >= 1) { w.zones = z.map((m) => Math.round(m * 10) / 10); w.hrAvg = w.hrAvg ?? Math.round(sum / wt); w.hrMax = Math.round(mx); }
+  }
+  return smp.length;
+}
+
+export async function fetchDays(n = 35, opts: { hrDays?: number; hrMax?: number | null } = {}) {
   const sinceDate = new Date(Date.now() - (n + 1) * 864e5);
   const since = sinceDate.toISOString(), sinceD = sinceDate.toLocaleDateString('en-CA', { timeZone: TZ });
   const status = {};
   const run = async (name, fn) => { try { const v = await fn(); status[name] = { ok: true, count: v.length }; return v; } catch (e) { status[name] = { ok: false, error: e.message }; return []; } };
 
-  const [sleeps, rhr, hrv, spo2, resp, steps, azm, ex, temp, vo2] = await Promise.all([
+  const hrSince = new Date(Date.now() - ((opts.hrDays || 7) + 1) * 864e5).toISOString();
+  const [sleeps, rhr, hrv, spo2, resp, steps, azm, ex, temp, vo2, hrPts] = await Promise.all([
     run('sleep', () => listAll('sleep', `sleep.interval.end_time >= "${since}"`, 25, 10)),
     run('resting-heart-rate', () => listAll('daily-resting-heart-rate', `daily_resting_heart_rate.date >= "${sinceD}"`, 100)),
     run('heart-rate-variability', () => listAll('daily-heart-rate-variability', `daily_heart_rate_variability.date >= "${sinceD}"`, 100)),
@@ -139,6 +213,7 @@ export async function fetchDays(n = 35) {
     run('exercise', () => listAll('exercise', `exercise.interval.civil_start_time >= "${sinceD}"`, 25, 12)),
     run('skin-temperature', () => listAll('daily-sleep-temperature-derivations', `daily_sleep_temperature_derivations.date >= "${sinceD}"`, 100)),
     run('vo2-max', () => listAll('vo2-max', `vo2_max.sample_time.physical_time >= "${since}"`, 100, 2)),
+    run('heart-rate', () => listAll('heart-rate', `heart_rate.sample_time.physical_time >= "${hrSince}"`, 10000, 16)),
   ]);
 
   const byDate = {};
@@ -181,6 +256,7 @@ export async function fetchDays(n = 35) {
   }
   for (const d of Object.values(byDate)) if (d.workouts) { d.workouts.sort((a, b) => a.start.localeCompare(b.start)); d.exMin = d.workouts.reduce((s, w) => s + (w.min || 0), 0); }
 
+  try { processHeart(hrPts, steps, byDate, opts.hrMax ?? null); } catch (e) { status['heart-rate'] = { ok: false, error: 'processing: ' + e.message }; }
   const days = Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date));
   return { days, status, sample: { sleep: sleeps[0] && { ...sleeps[0], sleep: { ...sleeps[0].sleep, stages: '…' } }, hrv: hrv[0], rhr: rhr[0], temp: temp[0], exercise: ex[0] } };
 }

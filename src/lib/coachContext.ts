@@ -8,9 +8,9 @@ export function buildCoachContext(p: any) {
   const lines = [
     `Today's date: ${new Date().toISOString().slice(0, 10)}. Sleep need setting: ${p.prefs.sleepNeedHours}h. Source: ${p.source === 'demo' ? 'DEMO data' : 'Fitbit Air via Google Health API'}.`,
     '',
-    'Last 14 days (date | recovery% | sleep score | asleep | deep min | REM min | HRV ms | resting HR | SpO2 | resp rate | skin temp dev C | strain 0-21 | steps | active zone min | workouts):',
+    'Last 14 days (date | recovery% | sleep score | asleep | deep min | REM min | HRV ms | resting HR | SpO2 | resp rate | skin temp dev C | strain 0-21 | steps | active zone min | daytime stress 0-3 | workouts):',
     ...days.map((d: any) => [
-      d.date, f(d.recovery), f(d.sleepScore), hm(d.sleep?.asleep ?? null), f(d.sleep?.deep), f(d.sleep?.rem), f(d.hrv), f(d.rhr), f(d.spo2, 1), f(d.resp, 1), f(d.temp, 2), f(d.strain, 1), f(d.steps), f(d.azm),
+      d.date, f(d.recovery), f(d.sleepScore), hm(d.sleep?.asleep ?? null), f(d.sleep?.deep), f(d.sleep?.rem), f(d.hrv), f(d.rhr), f(d.spo2, 1), f(d.resp, 1), f(d.temp, 2), f(d.strain, 1), f(d.steps), f(d.azm), f(d.stress, 1),
       (d.workouts || []).map((w: any) => `${w.name} ${w.min ?? '?'}min`).join('; ') || 'none',
     ].join(' | ')),
     '',

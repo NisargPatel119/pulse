@@ -31,16 +31,18 @@ const ALL_VIEWS = [...VIEWS, ['healthspan', 'Healthspan']];
 const ALIAS = { coach: 'insights' };
 const LEVEL = { alert: ['--rec-lo', 'alert'], warn: ['--rec-mid', 'alert'], info: ['--strain', 'info'], good: ['--rec-hi', 'good'] };
 
-const S = { data: null, state: null, view: location.hash.slice(1) || 'today', range: 30, chat: [], brief: null, briefLoading: false, allInsights: false };
+const S = { data: null, state: null, view: location.hash.slice(1) || 'today', range: 30, chat: [], brief: null, briefLoading: false, allInsights: false, sel: null, push: null };
 S.view = ALIAS[S.view] || S.view;
 if (!ALL_VIEWS.some(([k]) => k === S.view)) S.view = 'today';
 
 // ---------- data helpers ----------
 const days = () => S.data.days;
-const last = () => days()[days().length - 1];
-const lastWith = (f) => [...days()].reverse().find(f);
-const win = (n = S.range) => days().slice(-n);
-const A = () => S.data.analytics;
+const selIdx = () => (S.sel == null ? days().length - 1 : clamp(S.sel, 0, days().length - 1));
+const isToday = () => selIdx() === days().length - 1;
+const last = () => days()[selIdx()];
+const lastWith = (f) => { for (let i = selIdx(); i >= 0; i--) if (f(days()[i])) return days()[i]; };
+const win = (n = S.range) => days().slice(Math.max(0, selIdx() + 1 - n), selIdx() + 1);
+const A = () => { const x = S.data.analytics; return isToday() ? x : { ...x, targetStrain: null }; };
 
 function delta(now, prev, { dec = 0, good = 1, unit = '' } = {}) {
   if (now == null || prev == null) return '<span class="flat">–</span>';
@@ -69,7 +71,7 @@ function insightsList(items, limit) {
   return shown.map((i) => { const [c, ic] = LEVEL[i.level]; return `<div class="ins" style="--c:var(${c})"><div class="ico">${svg(ic)}</div><div class="insb"><b>${esc(i.title)}<span class="tg">${esc(i.tag)}</span></b><p>${esc(i.why || i.body)}</p>${i.steps?.length ? `<div class="dolabel">What to do</div><ul class="steps">${i.steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ul>` : ''}</div></div>`; }).join('');
 }
 function ringCard(go, label, ringOpts, status, glow) {
-  return `<div class="herocard" data-go="${go}" style="--glow:${glow}" role="link" tabindex="0">${C.ring({ ...ringOpts, label })}<div class="lab">${label}</div><div class="st">${status}</div></div>`;
+  return `<div class="herocard" data-go="${go}" style="--glow:${glow}" role="link" tabindex="0">${ib(go === 'activity' ? 'strain' : go)}${C.ring({ ...ringOpts, label })}<div class="lab">${label}</div><div class="st">${status}</div></div>`;
 }
 function rangeSeg() {
   return `<div class="seg" role="group" aria-label="Range">${[7, 30, 90].map((n) => `<button data-range="${n}" aria-pressed="${S.range === n}">${n}D</button>`).join('')}</div>`;
@@ -81,8 +83,21 @@ function targetBar(strain, band) {
 
 // ---------- views ----------
 const paceWord = (p) => (p <= 0.9 ? 'aging slower than the calendar' : p >= 1.1 ? 'aging faster than the calendar' : 'aging at calendar pace');
+const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+const fmtDay = (date) => new Date(date + 'T12:00:00').toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+const DAY_VIEWS = ['today', 'sleep', 'recovery', 'activity'];
 
-function headline(rec, a) {
+function dateBar() {
+  const i = selIdx(), n = days().length, d = days()[i];
+  return `<button class="dnav" data-day="-1" ${i <= 0 ? 'disabled' : ''} aria-label="Previous day">‹</button>
+    <div class="dlabel"><b>${isToday() ? 'Today' : fmtDay(d.date)}</b>${isToday() ? `<span>${fmtDay(d.date)}</span>` : ''}</div>
+    <button class="dnav" data-day="1" ${i >= n - 1 ? 'disabled' : ''} aria-label="Next day">›</button>
+    ${isToday() ? '' : '<button class="chip jump" data-day="today">Back to today</button>'}`;
+}
+
+function headline(rec, t, a) {
+  if (!isToday()) return `${rec ? `Recovery ${rec.recovery}% (${recWord(rec.recovery)})` : 'No recovery score'}${t?.strain != null ? ` · strain ${t.strain.toFixed(1)}` : ''}.`;
   if (!rec) return 'Building your baseline. Check back in a few days.';
   const [lo, hi] = a.targetStrain;
   return rec.recovery >= 67 ? `Primed. Go hard today (strain ${lo}–${hi}).` : rec.recovery >= 34 ? `Moderate. Train steady (strain ${lo}–${hi}).` : `Low recovery. Keep it easy (strain under ${hi}).`;
@@ -92,15 +107,16 @@ function vitalTiles() {
   const defs = [
     { key: 'hrv', label: 'HRV', unit: 'ms', good: 1, dec: 0 },
     { key: 'rhr', label: 'Resting HR', unit: 'bpm', good: -1, dec: 0 },
-    { key: 'spo2', label: 'Blood oxygen', unit: '%', good: 1, dec: 1 },
+    win(14).some((x) => x.stress != null) ? { key: 'stress', label: 'Stress', unit: '/3', good: -1, dec: 1 } : { key: 'spo2', label: 'Blood oxygen', unit: '%', good: 1, dec: 1 },
     { key: 'steps', label: 'Steps', unit: '', good: 0, dec: 0 },
   ];
   return defs.map((v) => {
     const d = lastWith((x) => x[v.key] != null);
     if (!d) return '';
-    const series = days().slice(-14).map((x) => x[v.key]);
+    const series = win(14).map((x) => x[v.key]);
     let chip = '';
     if (v.key === 'steps') chip = '<span class="flat">goal 8,000</span>';
+    else if (v.key === 'stress') chip = `<span class="${d.stress >= 2 ? 'down' : d.stress >= 1 ? 'flat' : 'up'}">${d.stress >= 2 ? 'High' : d.stress >= 1 ? 'Moderate' : 'Low'}</span>`;
     else {
       const b = nonNull(days().filter((x) => x.date < d.date).slice(-28).map((x) => x[v.key]));
       if (b.length >= 4) {
@@ -109,7 +125,7 @@ function vitalTiles() {
       }
     }
     const val = v.key === 'steps' ? d.steps.toLocaleString() : round(d[v.key], v.dec);
-    return `<div class="vt"><div class="vl">${v.label}</div><div class="vv">${val}<small>${v.unit}</small></div><div class="vd">${chip}</div>${C.spark(series, css('--mut'), 100, 26)}</div>`;
+    return `<div class="vt">${ib(v.key)}<div class="vl">${v.label}</div><div class="vv">${val}<small>${v.unit}</small></div><div class="vd">${chip}</div>${C.spark(series, css('--mut'), 100, 26)}</div>`;
   }).join('');
 }
 
@@ -119,28 +135,87 @@ function healthTile() {
   if (h.needsProfile) return `<div class="card hs"><div><div class="vl">Pulse Age</div><div class="sub">Add your age and sex to see your biological age.</div></div><button class="btn ghost" id="setProfile">Set up</button></div>`;
   if (h.needsData) return `<div class="card hs"><div><div class="vl">Pulse Age</div><div class="sub">Building your baseline: ${h.daysHave} of 14 days of data.</div></div></div>`;
   const word = h.offset <= -0.1 ? `${Math.abs(h.offset)} years younger` : h.offset >= 0.1 ? `${h.offset} years older` : 'on par with your age';
-  return `<div class="card hs click" data-go="healthspan" role="link" tabindex="0"><div><div class="vl">Pulse Age</div><div class="hsv">${h.bioAge}<small> yrs</small></div><div class="sub">${word} · age ${h.age}</div></div><div class="hspace"><span class="chip ${h.pace <= 0.9 ? 'good' : h.pace >= 1.1 ? 'bad' : ''}">Pace ${h.pace}x</span><span class="sub">${h.pace <= 0.9 ? 'slower' : h.pace >= 1.1 ? 'faster' : 'steady'}</span></div></div>`;
+  return `<div class="card hs click" data-go="healthspan" role="link" tabindex="0">${ib('healthspan')}<div><div class="vl">Pulse Age</div><div class="hsv">${h.bioAge}<small> yrs</small></div><div class="sub">${word} · age ${h.age}</div></div><div class="hspace"><span class="chip ${h.pace <= 0.9 ? 'good' : h.pace >= 1.1 ? 'bad' : ''}">Pace ${h.pace}x</span><span class="sub">${h.pace <= 0.9 ? 'slower' : h.pace >= 1.1 ? 'faster' : 'steady'}</span></div></div>`;
+}
+
+// ---- data health: which metrics are actually arriving ----
+const HEALTH_METRICS = [
+  ['Sleep', (d) => d.sleep?.asleep, 'Wear the band overnight, then sync before opening Pulse.'],
+  ['HRV', (d) => d.hrv, 'Comes with sleep tracking; appears after a night of wear.'],
+  ['Resting heart rate', (d) => d.rhr, 'Comes with sleep tracking; appears after a night of wear.'],
+  ['Blood oxygen', (d) => d.spo2, 'Needs overnight SpO₂ tracking enabled in the Fitbit app.'],
+  ['Breathing rate', (d) => d.resp, 'Comes with sleep tracking.'],
+  ['Skin temperature', (d) => d.temp, 'Appears after several consecutive nights of wear.'],
+  ['Steps', (d) => d.steps != null, 'Wear the band during the day.'],
+  ['Active zone minutes', (d) => d.azm != null, 'Counted when your heart rate is elevated.'],
+  ['Heart-rate detail', (d) => d.trimp != null, 'Detailed heart rate powers strain, zones and stress.'],
+  ['Workouts', (d) => d.workouts?.length, 'Only present on days you exercise.', true],
+  ['VO₂ max', (d) => d.vo2 != null, 'Fitbit estimates it from GPS walks or runs.', true],
+];
+function dataHealth() {
+  const w = days().slice(-30), w14 = days().slice(-14);
+  const rows = HEALTH_METRICS.map(([label, f, tip, optional]) => {
+    const n = w.filter(f).length, cov = w.length ? n / w.length : 0;
+    const status = optional ? (n > 0 ? 'ok' : 'opt') : cov >= 0.7 ? 'ok' : cov >= 0.3 ? 'part' : 'miss';
+    return { label, tip, n, total: w.length, status, cov14: w14.length ? w14.filter(f).length / w14.length : 0, core: ['Sleep', 'HRV', 'Resting heart rate'].includes(label) };
+  });
+  return { rows, coreProblem: S.data.source !== 'demo' && rows.some((r) => r.core && r.cov14 < 0.5) };
+}
+function dataHealthHtml() {
+  const { rows } = dataHealth();
+  const sym = { ok: '✓', part: '!', miss: '✕', opt: '–' };
+  const list = rows.map((r) => `<div class="dhr ${r.status}"><span class="dhi">${sym[r.status]}</span><div><b>${r.label}</b><span class="sub">${r.status === 'opt' ? 'Not reported yet (optional)' : `${r.n} of ${r.total} days`}${r.status === 'part' || r.status === 'miss' ? ` · ${r.tip}` : ''}</span></div></div>`).join('');
+  const st = S.data.status || {};
+  const api = Object.keys(st).length ? `<div class="sub" style="margin-top:10px">Last sync: ${Object.entries(st).map(([k, v]) => `${esc(k)} ${v.ok ? `✓ ${v.count}` : `<span class="er">✕ ${esc(v.error)}</span>`}`).join(' · ')}</div>` : '';
+  return `<div class="dolabel" style="margin-top:0">Data health (last 30 days)</div>${list}${api}`;
+}
+
+// ---- setup checklist ----
+function setupSteps() {
+  const standalone = window.navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+  const p = S.data.prefs || {}, st = S.state || {};
+  const steps = [];
+  if (!st.demoDeployment) steps.push({ done: !!st.connected, label: 'Connect your Fitbit', sub: 'Sign in with Google to load your own data', href: '/api/connect' });
+  steps.push({ done: !!(p.age && p.sex), label: 'Add your age and sex', sub: 'Needed for Pulse Age', act: 'settings' });
+  steps.push({ done: standalone, label: 'Add Pulse to your Home Screen', sub: 'In Safari: Share, then Add to Home Screen', act: 'hint' });
+  if (S.push?.supported) steps.push({ done: S.push.on, label: 'Turn on notifications', sub: 'Morning briefing and bedtime reminder', act: 'push' });
+  return steps;
+}
+function setupCard() {
+  if (lsGet('pulse_setup_hidden') === '1' || !isToday()) return '';
+  const steps = setupSteps(), left = steps.filter((s) => !s.done);
+  if (!left.length || (S.state?.demoDeployment && left.every((s) => s.act === 'hint'))) return '';
+  const done = steps.length - left.length;
+  const row = (s) => { const inner = `<span class="stk ${s.done ? 'on' : ''}">${s.done ? '✓' : ''}</span><span class="stt"><b>${s.label}</b><span class="sub">${s.sub}</span></span><span class="chev">${s.done ? '' : '›'}</span>`; return s.done ? `<div class="step done">${inner}</div>` : s.href ? `<a class="step" href="${s.href}">${inner}</a>` : `<button class="step" data-act="${s.act}">${inner}</button>`; };
+  return `<div class="card setup"><h3>Finish setting up <small>${done} of ${steps.length}</small></h3>${steps.map(row).join('')}<div id="homeHint" class="sub hidden" style="padding:6px 0 2px">Open this site in Safari, tap the Share button, then choose Add to Home Screen.</div><button class="more" id="hideSetup" style="padding:6px 0 0;min-height:0">Hide this</button></div>`;
 }
 
 function attention() {
   const items = S.data.insights.filter((i) => i.tag !== 'today' && (i.level === 'alert' || i.level === 'warn')).slice(0, 3);
-  if (!items.length) return `<div class="allclear">${svg('good')}<span>All clear. Nothing needs your attention.</span></div>`;
-  return items.map((i) => { const [c, ic] = LEVEL[i.level]; return `<button class="attn" data-go="insights" style="--c:var(${c})"><span class="ico">${svg(ic)}</span><span class="at">${esc(i.title)}</span><span class="chev">›</span></button>`; }).join('');
+  const dh = dataHealth();
+  const rows = [];
+  if (dh.coreProblem) rows.push(`<button class="attn" id="openHealth" style="--c:var(--rec-mid)"><span class="ico">${svg('alert')}</span><span class="at">Some data isn't syncing. Check data health</span><span class="chev">›</span></button>`);
+  items.forEach((i) => { const [c, ic] = LEVEL[i.level]; rows.push(`<button class="attn" data-go="insights" style="--c:var(${c})"><span class="ico">${svg(ic)}</span><span class="at">${esc(i.title)}</span><span class="chev">›</span></button>`); });
+  return rows.length ? rows.join('') : `<div class="allclear">${svg('good')}<span>All clear. Nothing needs your attention.</span></div>`;
 }
 
 function viewToday() {
   const rec = lastWith((d) => d.recovery != null), sl = lastWith((d) => d.sleepScore != null), t = last();
-  const a = A(), plan = a.sleepPlan;
+  const a = A(), plan = a.sleepPlan, today = isToday();
   const hero = `<div class="hero">
     ${ringCard('recovery', 'Recovery', { value: rec?.recovery, max: 100, color: rec ? recColor(rec.recovery) : css('--line'), color2: rec ? recColor(rec.recovery) : css('--line'), text: rec ? rec.recovery + '%' : '–', size: 190 }, rec ? recWord(rec.recovery) : 'Needs ~5 days of data', rec ? recColor(rec.recovery) : 'transparent')}
     ${ringCard('sleep', 'Sleep', { value: sl?.sleepScore, max: 100, color: css('--sleep'), color2: css('--sleep2'), text: sl ? sl.sleepScore + '%' : '–', size: 190 }, sl ? fmtH(sl.sleep.asleep) : 'No sleep yet', css('--sleep'))}
-    ${ringCard('activity', 'Strain', { value: t?.strain, max: 21, color: css('--strain'), color2: css('--strain2'), text: t?.strain != null ? t.strain.toFixed(1) : '–', size: 190 }, a.targetStrain ? `target ${a.targetStrain[0]}–${a.targetStrain[1]}` : '', css('--strain'))}
+    ${ringCard('activity', 'Strain', { value: t?.strain, max: 21, color: css('--strain'), color2: css('--strain2'), text: t?.strain != null ? t.strain.toFixed(1) : '–', size: 190 }, a.targetStrain ? `target ${a.targetStrain[0]}–${a.targetStrain[1]}` : 'of 21', css('--strain'))}
   </div>`;
+  const second = today
+    ? `<div class="card gl" data-go="sleep">${ib('sleep')}<div class="vl">Bedtime tonight</div><div class="gv">${plan.bedtime}</div><div class="sub">${fmtH(plan.needMin)} of sleep${plan.debtMin > 60 ? ` · ${fmtH(plan.debtMin)} debt` : ''}</div></div>`
+    : `<div class="card gl" data-go="sleep"><div class="vl">Slept</div><div class="gv">${sl ? tf(sl.sleep.start) : '–'}</div><div class="sub">${sl ? `to ${tf(sl.sleep.end)} · ${fmtH(sl.sleep.asleep)}` : 'No sleep recorded'}</div></div>`;
   const glance = `<div class="grid2 tight">
-    <div class="card gl" data-go="activity"><div class="vl">Today's strain</div><div class="gv">${t?.strain != null ? t.strain.toFixed(1) : '–'}<small> / ${a.targetStrain ? a.targetStrain[1] : 21}</small></div>${targetBar(t?.strain, a.targetStrain)}</div>
-    <div class="card gl" data-go="sleep"><div class="vl">Bedtime tonight</div><div class="gv">${plan.bedtime}</div><div class="sub">${fmtH(plan.needMin)} of sleep${plan.debtMin > 60 ? ` · ${fmtH(plan.debtMin)} debt` : ''}</div></div>
+    <div class="card gl" data-go="activity">${ib('strain')}<div class="vl">${today ? "Today's strain" : 'Strain'}</div><div class="gv">${t?.strain != null ? t.strain.toFixed(1) : '–'}<small> / ${a.targetStrain ? a.targetStrain[1] : 21}</small></div>${targetBar(t?.strain, a.targetStrain)}</div>
+    ${second}
   </div>`;
-  return `<div class="stack"><p class="headline">${headline(rec, a)}</p>${hero}${glance}<div class="vitals">${vitalTiles()}</div>${healthTile()}<div class="card"><h3>Needs attention <small><button class="more" data-go="insights" style="padding:0;min-height:0">All insights ›</button></small></h3>${attention()}</div></div>`;
+  const attn = today ? `<div class="card"><h3>Needs attention <small><button class="more" data-go="insights" style="padding:0;min-height:0">All insights ›</button></small></h3>${attention()}</div>` : '';
+  return `<div class="stack">${setupCard()}<p class="headline">${headline(rec, t, a)}</p>${hero}${glance}<div class="vitals">${vitalTiles()}</div>${healthTile()}${attn}</div>`;
 }
 
 const LEVER_TIPS = {
@@ -190,7 +265,7 @@ function viewHealthspan() {
 }
 
 function wkRow(w) {
-  return `<div class="wk"><div class="ico">${esc((w.name || '?')[0].toUpperCase())}</div><div class="m"><b>${esc(w.name)}</b><span class="sub">${w.start ? new Date(w.start).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) + ' · ' + tf(w.start) : ''}</span></div>
+  return `<div class="wk"><div class="ico">${esc((w.name || '?')[0].toUpperCase())}</div><div class="m"><b>${esc(w.name)}</b><span class="sub">${w.start ? new Date(w.start).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) + ' · ' + tf(w.start) : ''}</span>${w.zones ? zoneBar(w.zones, 6) : ''}</div>
   <div class="st2"><div><b>${w.min ?? '–'}</b><small>min</small></div><div><b>${w.kcal ?? '–'}</b><small>kcal</small></div><div><b>${w.avgHr ?? '–'}</b><small>avg bpm</small></div><div><b>${w.azm ?? '–'}</b><small>AZM</small></div></div></div>`;
 }
 
@@ -207,7 +282,7 @@ function viewSleep() {
     <div class="card"><h3>Sleep performance <small>${sl.date}</small></h3><div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap"><div style="width:150px">${C.ring({ value: sl.sleepScore, max: 100, color: css('--sleep'), color2: css('--sleep2'), text: sl.sleepScore + '%', size: 150, label: 'Sleep' })}</div>
       <div style="flex:1;min-width:200px">${bar('Duration', p?.duration, css('--sleep'))}${bar('Efficiency', p?.efficiency, css('--sleep'))}${bar('Restorative', p?.restorative, css('--sleep'))}${bar('Consistency', p?.consistency, css('--sleep'))}</div></div>
       <div class="kv"><div><small>Asleep</small><b>${fmtH(n.asleep)}</b></div><div><small>In bed</small><b>${fmtH(n.inBed)}</b></div><div><small>To fall asleep</small><b>${n.latency ?? '–'} min</b></div><div><small>Bed → wake</small><b style="font-size:15px">${tf(n.start)} – ${tf(n.end)}</b></div></div></div>
-    <div class="card"><h3>Tonight <small>sleep plan</small></h3><div class="big">${plan.bedtime}</div><div class="sub" style="margin:6px 0 14px">Bedtime for a ${plan.wake} wake-up</div>
+    <div class="card"><h3>${isToday() ? 'Tonight' : 'Tonight (from today)'} <small>sleep plan</small></h3><div class="big">${plan.bedtime}</div><div class="sub" style="margin:6px 0 14px">Bedtime for a ${plan.wake} wake-up</div>
       <div class="minibar"><span class="n">Need tonight</span><div class="meter"><i style="left:0;width:${Math.min(100, Math.round(plan.needMin / 6))}%;background:var(--sleep2)"></i></div><span class="v" style="width:auto;min-width:70px">${fmtH(plan.needMin)}</span></div>
       <div class="kv"><div><small>Base need</small><b>${fmtH(plan.baseMin)}</b></div><div><small>Debt (7d)</small><b>${fmtH(plan.debtMin)}</b></div><div><small>Avg bedtime</small><b>${A().avgBedtime ?? '–'}</b></div><div><small>Variability</small><b>±${A().bedtimeSd ?? '–'}m</b></div></div></div>
   </div>
@@ -236,7 +311,7 @@ function viewRecovery() {
   const mini = (title, key, color, unit, dec) => `<div class="card"><h3>${title} <small>${unit}</small></h3>${C.line(w, (d) => d[key], { color, band: true, unit: ' ' + unit, dec, fmt: (v) => round(v, dec) })}</div>`;
   return `<div class="stack">${rangeSeg()}
   <div class="grid2">
-    <div class="card"><h3>Recovery <small>${rec.date}</small></h3><div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap"><div style="width:160px">${C.ring({ value: rec.recovery, max: 100, color: recColor(rec.recovery), text: rec.recovery + '%', size: 160, label: 'Recovery' })}</div><div style="flex:1;min-width:180px"><div class="chip ${rec.recovery >= 67 ? 'good' : rec.recovery >= 34 ? 'warn' : 'bad'}">${recWord(rec.recovery)}</div><p class="sub" style="margin:10px 0 0">Target strain <b style="color:var(--tx)">${a.targetStrain[0]}–${a.targetStrain[1]}</b> today.</p></div></div></div>
+    <div class="card"><h3>Recovery <small>${rec.date}</small></h3><div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap"><div style="width:160px">${C.ring({ value: rec.recovery, max: 100, color: recColor(rec.recovery), text: rec.recovery + '%', size: 160, label: 'Recovery' })}</div><div style="flex:1;min-width:180px"><div class="chip ${rec.recovery >= 67 ? 'good' : rec.recovery >= 34 ? 'warn' : 'bad'}">${recWord(rec.recovery)}</div><p class="sub" style="margin:10px 0 0">${a.targetStrain ? `Target strain <b style="color:var(--tx)">${a.targetStrain[0]}–${a.targetStrain[1]}</b> today.` : ''}</p></div></div></div>
     <div class="card"><h3>What's driving it <small>vs your 28-day baseline</small></h3>${rec.contrib.length ? rec.contrib.map(contribRow).join('') : '<p class="sub">No contributors yet.</p>'}</div>
   </div>
   <div class="card"><h3>Recovery score</h3>${recLegend()}${C.bars(w, (d) => d.recovery, { min: 0, max: 100, colorFn: recColor, patternFn: recPat, fmt: (v) => v + '% · ' + recWord(v), unit: '', label: 'recovery score', wide: true })}</div>
@@ -255,7 +330,7 @@ function viewActivity() {
       <div class="kv"><div><small>Steps</small><b>${(t?.steps || 0).toLocaleString()}</b></div><div><small>Active zone min</small><b>${t?.azm || 0}</b></div><div><small>Workout min</small><b>${t?.exMin || 0}</b></div></div></div>
     <div class="card"><h3>Weekly heart-health goal <small>150 active zone min</small></h3><div class="big">${a.weekTotals.azm}<span class="sub" style="font-size:16px;font-weight:500"> / 150</span></div><div class="meter" style="margin:14px 0"><i style="left:0;width:${azmPct}%;background:linear-gradient(90deg,var(--strain),var(--strain2))"></i></div><p class="sub" style="margin:0">${a.weekTotals.workouts} workout${a.weekTotals.workouts === 1 ? '' : 's'} in the last 7 days.</p></div>
   </div>
-  <div class="card"><h3>Daily strain</h3>${C.bars(w, (d) => d.strain, { min: 0, max: 21, colorFn: strainCol, label: 'daily strain', fmt: (v) => v.toFixed(1), wide: true })}</div>
+  ${zonesCard()}${stressCard()}<div class="card"><h3>Daily strain</h3>${C.bars(w, (d) => d.strain, { min: 0, max: 21, colorFn: strainCol, label: 'daily strain', fmt: (v) => v.toFixed(1), wide: true })}</div>
   <div class="grid2"><div class="card"><h3>Steps</h3>${C.bars(w, (d) => d.steps, { color: css('--strain2'), label: 'steps', fmt: (v) => Math.round(v).toLocaleString() })}</div><div class="card"><h3>Active zone minutes</h3>${C.bars(w, (d) => d.azm, { color: css('--strain'), label: 'active zone minutes' })}</div></div>
   <div class="card"><h3>Recent workouts <small>${wks.length}</small></h3>${wks.length ? wks.map(wkRow).join('') : '<p class="sub">No workouts in this period. Start one on your Fitbit Air and it will show up here.</p>'}</div></div>`;
 }
@@ -300,12 +375,13 @@ function renderNav() {
 function render() {
   if (!S.data) return;
   const hour = new Date().getHours();
-  $('title').textContent = S.view === 'today' ? (hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening') : ALL_VIEWS.find(([k]) => k === S.view)[1];
+  $('title').textContent = S.view === 'today' ? (isToday() ? (hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening') : 'Day review') : ALL_VIEWS.find(([k]) => k === S.view)[1];
   const sync = S.data.source === 'demo' ? 'Demo data' : 'Synced ' + tf(S.data.fetchedAt);
   $('date').textContent = new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' }) + (matchMedia('(max-width:860px)').matches ? ' · ' + sync : '');
   $('badge').textContent = S.data.source === 'demo' ? 'Demo data' : 'Synced ' + tf(S.data.fetchedAt);
   $('badge').className = 'badge' + (S.data.source === 'demo' ? ' demo' : '');
   renderNav();
+  const dv = DAY_VIEWS.includes(S.view); $('datebar').innerHTML = dv ? dateBar() : ''; $('datebar').classList.toggle('hidden', !dv);
   $('view').innerHTML = RENDER[S.view]();
   if (S.view === 'insights') ensureBrief();
 }
@@ -343,7 +419,7 @@ function settingsBody() {
   return `<label>Baseline sleep need <span><input id="need" type="number" min="5" max="11" step="0.25" value="${p.sleepNeedHours}"> h</span></label>
   <label>Age (for Pulse Age) <span><input id="age" type="number" min="16" max="100" step="1" value="${p.age ?? hs.age ?? ''}" placeholder="–"></span></label>
   <label>Sex (for Pulse Age) <span><select id="sex"><option value="" ${!(p.sex || hs.sex) ? 'selected' : ''}>–</option><option value="male" ${(p.sex || hs.sex) === 'male' ? 'selected' : ''}>Male</option><option value="female" ${(p.sex || hs.sex) === 'female' ? 'selected' : ''}>Female</option></select></span></label>
-  ${diag}
+  <div class="dh">${dataHealthHtml()}</div>
   ${S.state?.connected ? '<form method="post" action="/api/disconnect" onsubmit="return confirm(\'Disconnect and delete stored Fitbit data?\')"><button class="btn red">Disconnect Fitbit</button></form>' : (S.state?.demoDeployment ? '' : '<a class="btn" href="/api/connect" style="text-align:center;text-decoration:none">Connect Fitbit</a>')}
   ${S.state?.demoDeployment ? '' : '<form method="post" action="/api/logout"><button class="btn ghost" style="width:100%">Sign out</button></form>'}`;
 }
@@ -367,9 +443,14 @@ async function load(refresh) {
 
 // ---------- events ----------
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-view],[data-go],[data-range],[data-q],#moreIns,#regen,#setProfile');
+  const ex = e.target.closest('[data-explain]');
+  if (ex) { e.stopPropagation(); openExplain(ex.dataset.explain); return; }
+  const t = e.target.closest('[data-view],[data-go],[data-range],[data-q],[data-day],[data-act],#moreIns,#regen,#setProfile,#hideSetup,#openHealth');
   if (!t) return;
-  if (t.id === 'setProfile') { $('gear').click(); return; }
+  if (t.id === 'setProfile' || t.id === 'openHealth') { $('gear').click(); return; }
+  if (t.id === 'hideSetup') { lsSet('pulse_setup_hidden', '1'); render(); return; }
+  if (t.dataset.act) { const k = t.dataset.act; if (k === 'settings') $('gear').click(); else if (k === 'hint') $('homeHint')?.classList.toggle('hidden'); else if (k === 'push' && typeof enablePush === 'function') enablePush(); return; }
+  if (t.dataset.day) { const n = days().length; S.sel = t.dataset.day === 'today' ? null : clamp(selIdx() + +t.dataset.day, 0, n - 1); if (S.sel === n - 1) S.sel = null; render(); return; }
   if (t.dataset.view || t.dataset.go) { S.view = t.dataset.view || t.dataset.go; location.hash = S.view; render(); window.scrollTo(0, 0); }
   else if (t.dataset.range) { S.range = +t.dataset.range; render(); }
   else if (t.dataset.q) ask(t.dataset.q);
@@ -406,3 +487,36 @@ load();
 // re-render when crossing the phone/desktop breakpoint (charts pick their size at render time)
 let wasNarrow = innerWidth < 700, rt;
 addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { const n = innerWidth < 700; if (n !== wasNarrow) { wasNarrow = n; render(); } }, 200); });
+
+// day navigation: swipe left/right on the page, or arrow keys
+(function () {
+  let sx = 0, sy = 0, st = 0;
+  const step = (dir) => { if (!S.data || !DAY_VIEWS.includes(S.view)) return; const n = days().length; const i = clamp(selIdx() + dir, 0, n - 1); S.sel = i === n - 1 ? null : i; render(); };
+  document.addEventListener('touchstart', (e) => { const t = e.touches[0]; sx = t.clientX; sy = t.clientY; st = Date.now(); }, { passive: true });
+  document.addEventListener('touchend', (e) => {
+    const t = e.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy;
+    if (Date.now() - st < 600 && Math.abs(dx) > 80 && Math.abs(dy) < 40 && !e.target.closest('dialog,input,svg')) step(dx > 0 ? -1 : 1);
+  }, { passive: true });
+  document.addEventListener('keydown', (e) => { if (e.target.matches('input,select,textarea') || e.metaKey || e.ctrlKey) return; if (e.key === 'ArrowLeft') step(-1); else if (e.key === 'ArrowRight') step(1); });
+})();
+
+// ---- heart-rate zones + daytime stress (Activity tab) ----
+const fmtMin = (m) => (m >= 60 ? fmtH(m) : Math.round(m) + ' min');
+function zoneBar(z, h) {
+  const tot = z.reduce((s, v) => s + v, 0) || 1;
+  return `<div class="zbar" style="height:${h || 12}px">${z.map((m, i) => `<i class="z${i + 1}" style="width:${(m / tot) * 100}%" title="Zone ${i + 1}: ${Math.round(m)} min"></i>`).join('')}</div>`;
+}
+function zonesCard() {
+  const d = last();
+  if (!d?.hrz) return '';
+  const names = ['Zone 1 · Light', 'Zone 2 · Moderate', 'Zone 3 · Aerobic', 'Zone 4 · Hard', 'Zone 5 · Max'], pct = ['50–60%', '60–70%', '70–80%', '80–90%', '90–100%'];
+  const rows = d.hrz.map((m, i) => `<div class="zrow"><span class="sw z${i + 1}"></span><span class="zn">${names[i]}<small>${pct[i]} of max heart rate</small></span><b>${fmtMin(m)}</b></div>`).join('');
+  return `<div class="card"><h3>Heart-rate zones <small>${isToday() ? 'today' : fmtDay(d.date)}</small></h3>${zoneBar(d.hrz, 16)}<div style="margin-top:12px">${rows}</div><div class="sub" style="margin-top:8px">Avg ${d.hrAvg ?? '–'} bpm · max ${d.hrMax ?? '–'} bpm${d.trimp != null ? ` · load ${d.trimp}` : ''}</div></div>`;
+}
+function stressCard() {
+  const d = last();
+  if (!d?.stressHours) return '';
+  const word = d.stress >= 2 ? 'High' : d.stress >= 1 ? 'Moderate' : 'Low';
+  const col = (v) => (v >= 2 ? css('--rec-lo') : v >= 1 ? css('--rec-mid') : css('--rec-hi'));
+  return `<div class="card"><h3>Daytime stress ${ib('stress')}</h3><div style="display:flex;align-items:baseline;gap:10px;margin-bottom:8px"><span class="big">${d.stress.toFixed(1)}</span><span class="sub">of 3 · ${word}</span></div>${C.hourly(d.stressHours, { colorFn: col, patFn: (v) => (v >= 2 ? 'p-low' : null), label: 'daytime stress by hour' })}<div class="legend"><span><i class="sw lv-hi"></i>Low</span><span><i class="sw lv-mid"></i>Moderate</span><span><i class="sw lv-lo"></i>High</span></div><p class="sub" style="margin:8px 0 0">From your heart rate while sitting still, compared with your resting rate. Automatic, nothing to log.</p></div>`;
+}

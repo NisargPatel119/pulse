@@ -41,13 +41,23 @@ function demoDays(n = 45) {
       spo2: Math.round((96 + r() * 2.2 - (ill ? 2 : 0)) * 10) / 10,
       resp: Math.round((14.5 + r() * 1.2 + (ill ? 1.4 : 0)) * 10) / 10,
       steps, azm, exMin,
+      trimp: Math.round(steps / 220 + azm * 1.6 + exMin * 2.4 + r() * 25),
+      hrz: [Math.round(40 + r() * 40), Math.round(15 + r() * 25 + exMin * 0.3), Math.round(exMin * 0.35), Math.round(exMin * 0.2), Math.round(exMin * 0.05)],
+      hrAvg: Math.round(68 + r() * 10 + exMin * 0.15), hrMax: Math.round(120 + exMin * 0.9 + r() * 20),
+      ...demoStress(r, fatigue, ill),
       temp: Math.round(((r() - 0.5) * 0.6 + (ill ? 1 : 0)) * 100) / 100,
       vo2: i % 15 === 0 ? Math.round((44 + r() * 2) * 10) / 10 : undefined,
-      workouts: exMin ? [{ name: wname, type: wname.toUpperCase(), start: wstart.toISOString(), min: exMin, kcal: Math.round(exMin * (6 + r() * 5)), avgHr: Math.round(120 + r() * 40), azm: Math.round(exMin * (0.5 + r() * 0.8)), km: wname === 'Run' || wname === 'Cycling' || wname === 'Walk' ? Math.round(exMin * (0.1 + r() * 0.1) * 100) / 100 : null }] : undefined,
+      workouts: exMin ? [{ name: wname, type: wname.toUpperCase(), start: wstart.toISOString(), min: exMin, kcal: Math.round(exMin * (6 + r() * 5)), avgHr: Math.round(120 + r() * 40), azm: Math.round(exMin * (0.5 + r() * 0.8)), zones: [Math.round(exMin * 0.1), Math.round(exMin * 0.25), Math.round(exMin * 0.4), Math.round(exMin * 0.2), Math.round(exMin * 0.05)], km: wname === 'Run' || wname === 'Cycling' || wname === 'Walk' ? Math.round(exMin * (0.1 + r() * 0.1) * 100) / 100 : null }] : undefined,
     });
     prevLate = lateToday;
   }
   return days;
+}
+
+function demoStress(r, fatigue, ill) {
+  const level = Math.max(0, Math.min(3, 0.7 + fatigue * 0.35 + r() * 0.6 + (ill ? 0.8 : 0)));
+  const hours = Array.from({ length: 24 }, (_, h) => (h < 7 || h >= 22 ? null : Math.round(Math.max(0, Math.min(3, level * (0.6 + 0.5 * r() + (h >= 14 && h <= 16 ? 0.35 : 0)))) * 10) / 10));
+  return { stress: Math.round(level * 10) / 10, sedMin: 480, stressHours: hours };
 }
 
 function demoStages(start, asleep, deep, rem, inBed, r) {

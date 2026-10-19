@@ -45,6 +45,7 @@ function sleepScoreOf(p) {
 
 // ---- strain (0-21, logarithmic like Whoop: easy to rise early, hard to rise late) ----
 function strainScore(d) {
+  if (d.trimp != null) return round(21 * (1 - Math.exp(-d.trimp / 150)), 1); // heart-rate based when available
   const wk = (d.workouts || []).reduce((s, w) => s + (w.azm || 0) * 1.5 + (w.min || 0) * 0.4, 0);
   const load = (d.steps || 0) / 1000 + (d.azm || 0) * 1.2 + (d.workouts?.length ? wk : (d.exMin || 0) * 0.5);
   return round(21 * (1 - Math.exp(-load / 45)), 1);
@@ -126,6 +127,7 @@ function analytics(days, prefs) {
     ['Deep sleep', (p) => p.d.sleep?.deep, 'more deep sleep', 'less deep sleep'],
     ['Day strain', (p) => p.prev.strain, 'a harder day', 'an easier day'],
     ['Steps', (p) => p.prev.steps, 'more steps', 'fewer steps'],
+    ['Daytime stress', (p) => p.prev.stress, 'higher daytime stress', 'lower daytime stress'],
     ['Bedtime', (p) => (p.d.sleep?.start ? bedMinutes(p.d.sleep.start) : null), 'a later bedtime', 'an earlier bedtime'],
     ['Workout minutes', (p) => p.prev.exMin ?? 0, 'longer workouts', 'shorter workouts'],
   ];
@@ -328,6 +330,17 @@ function insights(days, prefs) {
   }
   const lowSp = days.slice(-7).filter((d) => d.spo2 && d.spo2 < 92);
   if (lowSp.length >= 2) add('alert', 'health', `Blood oxygen dipped below 92% on ${lowSp.length} nights`, 'Repeated low overnight readings can reflect nasal congestion, sleeping position, altitude, or sleep-disordered breathing. Wrist sensors can also read low if the band is loose.', ['Check the band fits snugly, one finger-width above the wrist bone.', 'Try side-sleeping and a nasal strip or saline rinse for a few nights.', 'If it persists, ask a clinician about a sleep apnea screening.']);
+
+  // 12b. Daytime stress pattern (heart rate while sitting still)
+  const stressDays = days.slice(-14).filter((d) => d.stressHours);
+  if (stressDays.length >= 5) {
+    const avg7 = mean(days.slice(-7).map((d) => d.stress));
+    const byHour = Array.from({ length: 24 }, (_, h) => mean(stressDays.map((d) => d.stressHours[h])));
+    const peak = byHour.map((v, h) => [v, h]).filter(([v]) => v != null).sort((x, y) => y[0] - x[0])[0];
+    const at = peak ? clock(peak[1] * 60).replace(':00', '') : null;
+    if (avg7 != null && avg7 >= 1.4) add('warn', 'stress', 'Daytime stress is running high (' + round(avg7, 1) + ' of 3)', 'Your heart rate while sitting still has been well above your resting level' + (at ? ', peaking around ' + at : '') + '. Sustained stress shows up later as lower HRV and poorer sleep.', ['Take a 5-minute walk or do 2 minutes of slow breathing (inhale 4s, exhale 6s)' + (at ? ' before ' + at : '') + '.', 'Move caffeine earlier: none after noon.', 'Protect tonight\'s sleep; stress and sleep feed each other.']);
+    else if (avg7 != null && avg7 <= 0.8) add('good', 'stress', 'Daytime stress is low (' + round(avg7, 1) + ' of 3)', 'Your heart rate stays close to resting level while you are sitting still, a good sign for recovery.', ['Keep the habits that are working: regular movement and sleep.']);
+  }
 
   // 13. Activity volume
   const st = days.slice(-7).filter((d) => d.steps != null);

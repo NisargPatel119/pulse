@@ -160,5 +160,17 @@
     return `<svg class="spark" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true"><path d="${d}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   }
 
-  window.C = { line, bars, sleepStack, sleepWindow, hypnogram, ring, heatmap, spark, css, mean, sd, fmtDate };
+  // 24 hourly bars (null = no data); vals on a 0-3 scale
+  function hourly(vals, o = {}) {
+    const W = 600, H = 150, p = { l: 28, r: 8, t: 8, b: 22 }, bw = (W - p.l - p.r) / 24 - 3;
+    const x = (h) => p.l + ((h + 0.5) / 24) * (W - p.l - p.r), y = (v) => p.t + (1 - v / 3) * (H - p.t - p.b);
+    let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.label || 'hourly chart')}">`;
+    [0, 1, 2, 3].forEach((v) => (s += `<line x1="${p.l}" x2="${W - p.r}" y1="${y(v)}" y2="${y(v)}" stroke="${css('--line')}"/><text x="${p.l - 6}" y="${y(v) + 4}" text-anchor="end" class="ax">${v}</text>`));
+    [[6, '6a'], [12, '12p'], [18, '6p']].forEach(([h, l]) => (s += `<text x="${x(h)}" y="${H - 5}" text-anchor="middle" class="ax">${l}</text>`));
+    const lab = (h) => `${((h + 11) % 12) + 1}${h >= 12 ? ' PM' : ' AM'}`;
+    vals.forEach((v, h) => { if (v == null) return; s += `<rect x="${x(h) - bw / 2}" y="${y(v)}" width="${bw}" height="${Math.max(2, y(0) - y(v))}" rx="3" fill="${o.patFn && o.patFn(v) ? `url(#${o.patFn(v)})` : o.colorFn(v)}"/><rect class="hit" x="${x(h) - bw}" y="0" width="${bw * 2}" height="${H}" fill="transparent" data-tip="<b>${lab(h)}</b><br>Stress ${v.toFixed(1)} of 3"/>`; });
+    return s + '</svg>';
+  }
+
+  window.C = { hourly, line, bars, sleepStack, sleepWindow, hypnogram, ring, heatmap, spark, css, mean, sd, fmtDate };
 })();

@@ -289,3 +289,51 @@ nav button.desk{display:flex}
 @media(max-width:380px){.vt{padding:12px}.gl{padding:14px}}
 
 @media(max-width:860px){.grid2.tight{grid-template-columns:1fr 1fr}.gl{padding:14px}.gl .sub{font-size:12px}}
+
+/* date navigation */
+.datebar{display:flex;align-items:center;gap:8px;margin:-6px 0 16px}
+.dnav{width:44px;height:44px;border-radius:12px;background:var(--card);border:1px solid var(--line);font-size:24px;line-height:1;color:var(--tx);display:grid;place-items:center;padding:0 0 3px}
+.dnav:disabled{opacity:.3;cursor:default}
+.dlabel{flex:1;text-align:center;line-height:1.2}
+.dlabel b{display:block;font-size:16px}.dlabel span{font-size:12px;color:var(--mut)}
+.chip.jump{background:var(--accent);color:var(--on-accent);border:0;padding:8px 12px;font-size:12px}
+/* info buttons */
+.info-btn{position:absolute;top:10px;right:10px;width:26px;height:26px;border-radius:50%;background:transparent;border:1.5px solid var(--mut2);color:var(--mut);font:italic 700 13px Georgia,serif;display:grid;place-items:center;padding:0;z-index:2}
+.info-btn:hover{color:var(--tx);border-color:var(--tx)}
+.herocard,.vt,.gl,.hs{position:relative}
+.herocard .info-btn{top:8px;right:8px}
+@media(max-width:860px){.info-btn{width:30px;height:30px;top:6px;right:6px}.herocard .info-btn{width:24px;height:24px;top:6px;right:6px;font-size:12px}}
+/* explain sheet */
+.exp-what{font-size:16px;font-weight:600;margin:0}
+.exp-p{margin:0;color:var(--mut);font-size:14px;line-height:1.55}
+.exp-tbl td:first-child{color:var(--tx)}
+.sheet-body .dolabel{margin:6px 0 2px}
+/* setup checklist */
+.setup .step{display:flex;align-items:center;gap:12px;width:100%;background:none;border:0;border-top:1px solid var(--line);padding:12px 0;text-align:left;color:var(--tx);text-decoration:none;min-height:56px}
+.setup .step:first-of-type{border-top:0;padding-top:0}
+.stk{flex:none;width:24px;height:24px;border-radius:50%;border:2px solid var(--mut2);display:grid;place-items:center;font-size:14px;font-weight:800}
+.stk.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.stt{flex:1;min-width:0}.stt b{display:block;font-size:15px}.stt .sub{display:block;font-size:13px}
+.step.done .stt b{color:var(--mut);text-decoration:line-through}
+.setup .chev{color:var(--mut2);font-size:22px}
+/* data health */
+.dhr{display:flex;gap:12px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--line)}
+.dhr:first-of-type{border-top:0}
+.dhi{flex:none;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:13px;background:var(--card2);color:var(--mut)}
+.dhr.ok .dhi{background:color-mix(in srgb,var(--rec-hi) 20%,transparent);color:var(--rec-hi)}
+.dhr.part .dhi{background:color-mix(in srgb,var(--rec-mid) 22%,transparent);color:var(--rec-mid)}
+.dhr.miss .dhi{background:color-mix(in srgb,var(--rec-lo) 22%,transparent);color:var(--rec-lo)}
+.dhr b{display:block;font-size:14px}.dhr .sub{display:block;font-size:12.5px}
+.er{color:var(--rec-lo)}
+
+/* heart-rate zones: one hue, five lightness steps (readable with any color vision) */
+:root{--z1:#D6F5F0;--z2:#9BE5DB;--z3:#4FCFC0;--z4:#1FA39A;--z5:#0F6E70}
+@media (prefers-color-scheme:light){:root{--z1:#A6E3DB;--z2:#6FD0C4;--z3:#33B3A5;--z4:#1B8A83;--z5:#0E5C5E}}
+.z1{background:var(--z1)}.z2{background:var(--z2)}.z3{background:var(--z3)}.z4{background:var(--z4)}.z5{background:var(--z5)}
+.zbar{display:flex;gap:2px;border-radius:99px;overflow:hidden;margin-top:6px;background:var(--card2)}
+.zbar i{display:block;height:100%;min-width:2px}
+.zrow{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--line)}
+.zrow:first-child{border-top:0}
+.zn{flex:1;font-size:14px}.zn small{display:block;color:var(--mut2);font-size:12px}
+.card{position:relative}
+.wk .m .zbar{margin-top:6px}
