@@ -12,11 +12,11 @@ body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 -apple-system,B
 button{font:inherit;color:inherit;cursor:pointer}
 .hidden{display:none!important}
 svg{display:block}
-.shell{display:grid;grid-template-columns:var(--nav) 1fr;min-height:100vh}
+.shell{display:grid;grid-template-columns:var(--nav) 1fr;min-height:calc(100vh / var(--zoom,1));zoom:var(--zoom,1)}
 .content{padding:calc(env(safe-area-inset-top) + 22px) 28px 60px;max-width:1120px;width:100%}
 
 /* nav */
-nav{position:sticky;top:0;height:100vh;padding:calc(env(safe-area-inset-top) + 22px) 14px 20px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:4px}
+nav{position:sticky;top:0;height:calc(100vh / var(--zoom,1));padding:calc(env(safe-area-inset-top) + 22px) 14px 20px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:4px}
 nav .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:19px;letter-spacing:-.02em;padding:0 12px 18px}
 nav .brand svg{width:26px;height:26px;stroke:var(--accent);fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
 nav button{display:flex;align-items:center;gap:12px;background:none;border:0;border-radius:12px;padding:11px 12px;color:var(--mut);font-weight:600;text-align:left}
@@ -140,7 +140,7 @@ svg .hit:hover{fill:color-mix(in srgb,var(--tx) 6%,transparent)}
 .card svg{width:100%;height:auto;overflow:visible}
 .ringsvg{overflow:visible}
 .spark{display:inline-block;vertical-align:middle}
-.tip{position:fixed;z-index:50;pointer-events:none;background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:13px;line-height:1.45;box-shadow:0 8px 30px #0006;max-width:240px}
+.tip{position:fixed;z-index:50;pointer-events:none;background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:calc(13px * var(--zoom,1));line-height:1.45;box-shadow:0 8px 30px #0006;max-width:240px}
 .foot{color:var(--mut2);font-size:12px;text-align:center;margin-top:36px}
 .skeleton{height:14px;border-radius:8px;background:linear-gradient(90deg,var(--card2),var(--line),var(--card2));background-size:200% 100%;animation:sk 1.3s infinite;margin:10px 0}
 @keyframes sk{to{background-position:-200% 0}}
@@ -157,7 +157,7 @@ svg .hit:hover{fill:color-mix(in srgb,var(--tx) 6%,transparent)}
 .msg.a{align-self:flex-start;background:var(--card2)}
 .ask{display:flex;gap:10px;margin-top:14px}
 .ask input{flex:1;background:var(--card2);color:var(--tx);border:1px solid var(--line);border-radius:14px;padding:12px 16px;font:inherit;min-width:0}
-dialog{background:var(--card);color:var(--tx);border:1px solid var(--line);border-radius:22px;padding:0;width:min(520px,calc(100vw - 24px));max-height:88vh}
+dialog{background:var(--card);color:var(--tx);border:1px solid var(--line);border-radius:22px;padding:0;width:min(520px,calc((100vw - 24px) / var(--zoom,1)));max-height:calc(88vh / var(--zoom,1));zoom:var(--zoom,1)}
 dialog::backdrop{background:#000a;backdrop-filter:blur(3px)}
 .sheet-head{display:flex;justify-content:space-between;align-items:center;padding:18px 20px 0}.sheet-head h2{margin:0;font-size:20px}
 .sheet-body{padding:16px 20px 22px;display:flex;flex-direction:column;gap:18px;overflow:auto}
@@ -212,7 +212,7 @@ body{overflow-x:hidden}
   .minibar .v{width:auto;min-width:38px}
   .kv{grid-template-columns:repeat(2,1fr)}
   .tbl{font-size:13px}
-  dialog{width:calc(100vw - 16px)}
+  dialog{width:calc((100vw - 16px) / var(--zoom,1))}
 }
 @media(max-width:380px){
   .hero{gap:6px}.herocard{padding:12px 2px 10px}.herocard .st{font-size:11px}
@@ -350,3 +350,32 @@ nav button.desk{display:flex}
 .ntfy-steps li{margin:4px 0}.ntfy-steps b{color:var(--tx)}
 .ntfy-link{color:var(--accent);font-weight:600}
 code.topic{display:block;margin-top:6px;padding:8px 10px;border-radius:10px;background:var(--card2);color:var(--tx);font-size:12.5px;word-break:break-all;user-select:all}
+
+/* smaller info buttons; the invisible ::after keeps a comfortable tap target */
+.info-btn{width:20px;height:20px;top:12px;right:12px;font-size:11px;border-width:1.3px}
+.info-btn::after{content:"";position:absolute;inset:-10px}
+.herocard .info-btn{width:18px;height:18px;top:8px;right:8px;font-size:10px}
+@media(max-width:860px){.info-btn{width:22px;height:22px;top:10px;right:10px;font-size:11.5px}.herocard .info-btn{width:20px;height:20px;top:6px;right:6px;font-size:10.5px}}
+/* chart legend swatches */
+.sw.band{background:color-mix(in srgb,var(--mut) 30%,transparent);border-radius:3px}
+.sw.avg{height:4px;border-radius:99px;background:var(--mut);vertical-align:3px}
+.legend{margin-top:10px;gap:14px}
+.card h3 small{max-width:62%;text-align:right}
+/* display size control */
+.zoomctl{display:flex;align-items:center;gap:12px}
+.zoomctl input[type=range]{flex:1;accent-color:var(--accent);height:32px}
+.zA{font-weight:800;color:var(--mut)}.zA.sm{font-size:12px}.zA.lg{font-size:20px}
+.zval{min-width:44px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.linkbtn{background:none;border:0;color:var(--accent);font-weight:600;font-size:12px;padding:4px 0;cursor:pointer;letter-spacing:0;text-transform:none}
+/* very narrow effective width (small phone at a large display size) */
+html.tiny .hero{gap:6px}
+html.tiny .herocard{padding:12px 2px 10px}
+html.tiny .herocard .st{font-size:11px}
+html.tiny h1{font-size:25px}
+html.tiny .content{padding-left:12px;padding-right:12px}
+html.tiny .vt{padding:12px}
+html.tiny .gl{padding:14px}
+html.tiny nav button{font-size:9.5px;padding:7px 2px}
+html.tiny .wk .st2 div:nth-child(n+2){display:none}
+
+.sheet-body select{background:var(--card2);color:var(--tx);border:1px solid var(--line);border-radius:10px;padding:9px 10px;font:inherit}

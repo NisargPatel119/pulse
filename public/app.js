@@ -291,7 +291,7 @@ function viewSleep() {
     <div class="legend" style="margin:0 0 6px"><span><i class="sw st-deep"></i>Deep</span><span><i class="sw st-rem"></i>REM</span><span><i class="sw st-light"></i>Light</span><span><i class="sw st-awake"></i>Awake</span></div>
     ${stageRow('Deep', n.deep || 0, 'st-deep', '13–23%')}${stageRow('REM', n.rem || 0, 'st-rem', '20–25%')}${stageRow('Light', n.light || 0, 'st-light', '45–55%')}</div>
   <div class="grid2"><div class="card"><h3>Sleep per night <small>hours by stage</small></h3>${C.sleepStack(win(), plan.baseMin)}</div>
-    <div class="card"><h3>Bed & wake times <small>consistency</small></h3>${C.sleepWindow(win(), tz)}</div></div>
+    <div class="card"><h3>Bed & wake times <small>${S.range > 30 ? 'last 30 nights' : 'consistency'}</small></h3>${C.sleepWindow(win(Math.min(S.range, 30)), tz)}</div></div>
   <div class="grid2"><div class="card"><h3>Sleep score</h3>${C.bars(win(), (d) => d.sleepScore, { min: 0, max: 100, color: css('--sleep'), unit: '%', label: 'sleep score' })}</div>
     <div class="card"><h3>Time to fall asleep <small>minutes</small></h3>${C.line(win(), (d) => d.sleep?.latency, { color: css('--sleep2'), unit: ' min', band: true })}</div></div></div>`;
 }
@@ -308,13 +308,13 @@ function viewRecovery() {
   if (!rec) return '<div class="card"><div class="empty">Recovery needs about 5 days of history to learn your baseline.</div></div>';
   const w = win(), a = A();
   const drivers = a.drivers.length ? a.drivers.map((d) => { const w50 = Math.abs(d.r) * 50; return `<div class="drv"><span class="n">${esc(d.label)}</span><div class="ax2"><i style="${d.r >= 0 ? 'left:50%' : `left:${50 - w50}%`};width:${w50}%;background:${d.r >= 0 ? css('--rec-hi') : css('--rec-lo')}"></i></div><span class="v">${d.r > 0 ? '+' : ''}${d.r}</span></div>`; }).join('') + `<p class="sub">How each day-before factor lines up with your next-morning recovery (−1 to +1, from your last ${a.drivers[0].n} days). Correlation, not proof.</p>` : '<p class="sub">Needs ~2 weeks of data.</p>';
-  const mini = (title, key, color, unit, dec) => `<div class="card"><h3>${title} <small>${unit}</small></h3>${C.line(w, (d) => d[key], { color, band: true, unit: ' ' + unit, dec, fmt: (v) => round(v, dec) })}</div>`;
+  const mini = (title, key, color, unit, dec) => `<div class="card"><h3>${title} <small>${statSmall(w, key, dec, unit)}</small></h3>${C.line(w, (d) => d[key], { color, band: true, unit: ' ' + unit, dec, fmt: (v) => round(v, dec) })}</div>`;
   return `<div class="stack">${rangeSeg()}
   <div class="grid2">
     <div class="card"><h3>Recovery <small>${rec.date}</small></h3><div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap"><div style="width:160px">${C.ring({ value: rec.recovery, max: 100, color: recColor(rec.recovery), text: rec.recovery + '%', size: 160, label: 'Recovery' })}</div><div style="flex:1;min-width:180px"><div class="chip ${rec.recovery >= 67 ? 'good' : rec.recovery >= 34 ? 'warn' : 'bad'}">${recWord(rec.recovery)}</div><p class="sub" style="margin:10px 0 0">${a.targetStrain ? `Target strain <b style="color:var(--tx)">${a.targetStrain[0]}–${a.targetStrain[1]}</b> today.` : ''}</p></div></div></div>
     <div class="card"><h3>What's driving it <small>vs your 28-day baseline</small></h3>${rec.contrib.length ? rec.contrib.map(contribRow).join('') : '<p class="sub">No contributors yet.</p>'}</div>
   </div>
-  <div class="card"><h3>Recovery score</h3>${recLegend()}${C.bars(w, (d) => d.recovery, { min: 0, max: 100, colorFn: recColor, patternFn: recPat, fmt: (v) => v + '% · ' + recWord(v), unit: '', label: 'recovery score', wide: true })}</div>
+  <div class="card"><h3>Recovery score</h3>${recLegend()}${C.bars(w, (d) => d.recovery, { min: 0, max: 100, colorFn: recColor, patternFn: recPat, fmt: (v) => v + '% · ' + recWord(v), unit: '', label: 'recovery score', wide: true, ticks: 3 })}</div>
   <div class="grid2">${mini('Heart rate variability', 'hrv', css('--rec-hi'), 'ms', 0)}${mini('Resting heart rate', 'rhr', css('--rec-lo'), 'bpm', 0)}${mini('Respiratory rate', 'resp', css('--strain'), 'rpm', 1)}${mini('Blood oxygen', 'spo2', css('--sleep'), '%', 1)}${w.some((d) => d.temp != null) ? mini('Skin temperature', 'temp', css('--rec-mid'), '°C vs baseline', 2) : ''}${w.some((d) => d.vo2 != null) ? mini('VO₂ max', 'vo2', css('--accent'), 'ml/kg/min', 1) : ''}</div>
   <div class="card"><h3>What moves your recovery</h3>${drivers}</div></div>`;
 }
@@ -330,7 +330,7 @@ function viewActivity() {
       <div class="kv"><div><small>Steps</small><b>${(t?.steps || 0).toLocaleString()}</b></div><div><small>Active zone min</small><b>${t?.azm || 0}</b></div><div><small>Workout min</small><b>${t?.exMin || 0}</b></div></div></div>
     <div class="card"><h3>Weekly heart-health goal <small>150 active zone min</small></h3><div class="big">${a.weekTotals.azm}<span class="sub" style="font-size:16px;font-weight:500"> / 150</span></div><div class="meter" style="margin:14px 0"><i style="left:0;width:${azmPct}%;background:linear-gradient(90deg,var(--strain),var(--strain2))"></i></div><p class="sub" style="margin:0">${a.weekTotals.workouts} workout${a.weekTotals.workouts === 1 ? '' : 's'} in the last 7 days.</p></div>
   </div>
-  ${zonesCard()}${stressCard()}<div class="card"><h3>Daily strain</h3>${C.bars(w, (d) => d.strain, { min: 0, max: 21, colorFn: strainCol, label: 'daily strain', fmt: (v) => v.toFixed(1), wide: true })}</div>
+  ${zonesCard()}${stressCard()}<div class="card"><h3>Daily strain</h3>${C.bars(w, (d) => d.strain, { min: 0, max: 21, colorFn: strainCol, label: 'daily strain', fmt: (v) => v.toFixed(1), wide: true, ticks: 3 })}</div>
   <div class="grid2"><div class="card"><h3>Steps</h3>${C.bars(w, (d) => d.steps, { color: css('--strain2'), label: 'steps', fmt: (v) => Math.round(v).toLocaleString() })}</div><div class="card"><h3>Active zone minutes</h3>${C.bars(w, (d) => d.azm, { color: css('--strain'), label: 'active zone minutes' })}</div></div>
   <div class="card"><h3>Recent workouts <small>${wks.length}</small></h3>${wks.length ? wks.map(wkRow).join('') : '<p class="sub">No workouts in this period. Start one on your Fitbit Air and it will show up here.</p>'}</div></div>`;
 }
@@ -346,7 +346,7 @@ function viewTrends() {
     <div class="card"><h3>Highlights</h3>${a.best ? `<div class="kv" style="grid-template-columns:1fr 1fr"><div><small>Best recovery</small><b style="color:var(--rec-hi)">${a.best.recovery}%</b><div class="sub" style="font-size:12px">${C.fmtDate(a.best.date)}</div></div><div><small>Lowest recovery</small><b style="color:var(--rec-lo)">${a.worst.recovery}%</b><div class="sub" style="font-size:12px">${C.fmtDate(a.worst.date)}</div></div></div>` : '<p class="sub">Highlights appear after a week of data.</p>'}
       <div class="kv" style="grid-template-columns:1fr 1fr"><div><small>Avg bedtime</small><b>${a.avgBedtime ?? '–'}</b></div><div><small>Bedtime variability</small><b>±${a.bedtimeSd ?? '–'}m</b></div></div></div></div>
   <div class="card"><h3>Recovery calendar <small>blue primed · yellow moderate · hatched low</small></h3>${C.heatmap(days(), (d) => d.recovery, recColor, (v) => v + '% · ' + recWord(v), recPat)}${recLegend()}</div>
-  <div class="grid2"><div class="card"><h3>HRV</h3>${C.line(w, (d) => d.hrv, { color: css('--rec-hi'), band: true, unit: ' ms' })}</div><div class="card"><h3>Resting heart rate</h3>${C.line(w, (d) => d.rhr, { color: css('--rec-lo'), band: true, unit: ' bpm' })}</div>
+  <div class="grid2"><div class="card"><h3>HRV <small>${statSmall(w, 'hrv', 0, 'ms')}</small></h3>${C.line(w, (d) => d.hrv, { color: css('--rec-hi'), band: true, unit: ' ms' })}</div><div class="card"><h3>Resting heart rate <small>${statSmall(w, 'rhr', 0, 'bpm')}</small></h3>${C.line(w, (d) => d.rhr, { color: css('--rec-lo'), band: true, unit: ' bpm' })}</div>
   <div class="card"><h3>Sleep duration</h3>${C.bars(w, (d) => (d.sleep?.asleep ? d.sleep.asleep / 60 : null), { color: css('--sleep'), ref: A().sleepPlan.baseMin / 60, refLabel: 'need', fmt: (v) => fmtH(v * 60), min: 0 })}</div><div class="card"><h3>Strain vs recovery</h3>${C.line(w, (d) => d.recovery, { color: css('--rec-hi'), unit: '% recovery', min: 0, max: 100 })}</div></div></div>`;
 }
 
@@ -416,7 +416,8 @@ function settingsBody() {
   const diag = Object.keys(st).length ? `<div class="diag"><b style="color:var(--tx)">Data connection</b><br>${Object.entries(st).map(([k, v]) => `${esc(k)}: ${v.ok ? `<span class="ok">${v.count} records</span>` : `<span class="er">${esc(v.error)}</span>`}`).join('<br>')}</div>` : '';
   const real = S.data.source !== 'demo' || S.state?.connected;
   const p = S.data.prefs, hs = S.data.healthspan || {};
-  return `<label>Baseline sleep need <span><input id="need" type="number" min="5" max="11" step="0.25" value="${p.sleepNeedHours}"> h</span></label>
+  return `${zoomHtml()}
+  <label>Baseline sleep need <span><input id="need" type="number" min="5" max="11" step="0.25" value="${p.sleepNeedHours}"> h</span></label>
   <label>Age (for Pulse Age) <span><input id="age" type="number" min="16" max="100" step="1" value="${p.age ?? hs.age ?? ''}" placeholder="–"></span></label>
   <label>Sex (for Pulse Age) <span><select id="sex"><option value="" ${!(p.sex || hs.sex) ? 'selected' : ''}>–</option><option value="male" ${(p.sex || hs.sex) === 'male' ? 'selected' : ''}>Male</option><option value="female" ${(p.sex || hs.sex) === 'female' ? 'selected' : ''}>Female</option></select></span></label>
   <div class="dh">${dataHealthHtml()}</div>
@@ -563,3 +564,33 @@ function notifHtml() {
 
 // service worker: offline fallback
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+
+// "latest X · avg Y" for chart headers
+function statSmall(arr, key, dec, unit) {
+  const v = nonNull(arr.map((d) => d[key]));
+  if (!v.length) return unit;
+  return `latest ${round(v[v.length - 1], dec)} · avg ${round(C.mean(v), dec)} ${unit}`;
+}
+
+// ---- display size: scales the whole interface (text, charts, icons); charts resize their own labels ----
+const zoomPct = () => Math.round((window.UI_ZOOM || 1) * 100);
+function applyTiny() { document.documentElement.classList.toggle('tiny', innerWidth / (window.UI_ZOOM || 1) < 340); }
+function applyZoom(pct) {
+  const z = Math.min(1.3, Math.max(0.85, pct / 100));
+  window.UI_ZOOM = z;
+  document.documentElement.style.setProperty('--zoom', z);
+  lsSet('pulse_ui_zoom', String(z));
+  applyTiny();
+  const lab = document.getElementById('zoomVal'); if (lab) lab.textContent = Math.round(z * 100) + '%';
+}
+function zoomHtml() {
+  const pct = zoomPct();
+  return `<div><div class="dolabel" style="margin-top:0;display:flex;justify-content:space-between;align-items:center">Text and display size <button class="linkbtn" id="zoomReset" ${pct === 100 ? 'hidden' : ''}>Reset</button></div>
+    <div class="zoomctl"><span class="zA sm">A</span><input type="range" id="zoom" min="85" max="130" step="5" value="${pct}" aria-label="Text and display size"><span class="zA lg">A</span><span id="zoomVal" class="zval">${pct}%</span></div>
+    <p class="sub" style="margin:6px 0 0;font-size:12px">Makes text, charts and icons larger or smaller.</p></div>`;
+}
+document.addEventListener('input', (e) => { if (e.target.id === 'zoom') applyZoom(+e.target.value); });
+document.addEventListener('change', (e) => { if (e.target.id === 'zoom') { const r = document.getElementById('zoomReset'); if (r) r.hidden = +e.target.value === 100; render(); } });
+document.addEventListener('click', (e) => { if (e.target.id === 'zoomReset') { applyZoom(100); const sl = document.getElementById('zoom'); if (sl) sl.value = 100; e.target.hidden = true; render(); } });
+applyTiny();
+addEventListener('resize', applyTiny);
