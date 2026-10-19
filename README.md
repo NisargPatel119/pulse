@@ -20,12 +20,12 @@ Bevel reads Apple Health, which only exists on-device, so it needs a native iPho
 
 Data syncs when you open the app (if older than 30 min), on **Refresh**, and daily at 11:00 UTC via Vercel Cron.
 
-## Notifications (optional)
-Pulse sends a morning briefing (after the daily sync, ~7 AM US Eastern), a bedtime reminder (~9 PM Eastern) and a weekly review on Mondays.
-1. Add `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` (e.g. `mailto:you@example.com`) in Vercel. Generate keys with `npx web-push generate-vapid-keys`.
-2. On iPhone: open the site in Safari, Share, **Add to Home Screen**, then open it from the Home Screen (iOS only allows web push for installed apps).
-3. Settings (gear icon) -> **Turn on notifications**.
-Vercel Hobby crons run once a day at a fixed UTC time, so edit the two schedules in `vercel.json` to match your timezone. The same service worker keeps your last data viewable offline.
+## Notifications (optional, no setup)
+Pulse sends a morning briefing (after the daily sync, ~7 AM US Eastern), a bedtime reminder (~9 PM Eastern) and a weekly review on Mondays, using the free [ntfy](https://ntfy.sh) app. There are no keys or accounts.
+1. Install **ntfy** from the App Store.
+2. In Pulse: Settings (gear icon) -> Notifications -> **Subscribe in ntfy** (or add the shown topic in the app), then **Send a test**.
+Pulse generates a private random topic and stores it in your database. Messages pass through ntfy.sh; to use your own server set `NTFY_SERVER` (and `NTFY_TOKEN` if it needs auth). `NTFY_TOPIC` overrides the generated topic and `APP_URL` sets the link that opens when you tap a notification (Vercel's production URL is used by default).
+Vercel Hobby crons run once a day at a fixed UTC time, so edit the two schedules in `vercel.json` to match your timezone. A small service worker also keeps your last data viewable offline.
 
 ## What you get
 Six tabs, built to work as well on your iPhone as on a laptop:

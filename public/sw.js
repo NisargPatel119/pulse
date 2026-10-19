@@ -1,4 +1,4 @@
-// Pulse service worker: push notifications + offline fallback (last data stays viewable without a connection)
+// Pulse service worker: offline fallback (last data stays viewable without a connection)
 const CACHE = 'pulse-v5';
 
 self.addEventListener('install', () => self.skipWaiting());
@@ -12,7 +12,7 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== location.origin) return;
-  if (/^\/(api\/(connect|oauth|logout|disconnect|cron|raw|push)|login)/.test(url.pathname)) return;
+  if (/^\/(api\/(connect|oauth|logout|disconnect|cron|raw|notify)|login)/.test(url.pathname)) return;
   e.respondWith(
     fetch(req)
       .then((res) => {
@@ -21,20 +21,4 @@ self.addEventListener('fetch', (e) => {
       })
       .catch(() => caches.match(req).then((r) => r || (req.mode === 'navigate' ? caches.match('/') : Response.error())))
   );
-});
-
-self.addEventListener('push', (e) => {
-  let d = {};
-  try { d = e.data.json(); } catch { d = { title: 'Pulse', body: e.data ? e.data.text() : '' }; }
-  e.waitUntil(self.registration.showNotification(d.title || 'Pulse', { body: d.body || '', icon: '/apple-icon', badge: '/icon', tag: d.tag, data: { url: d.url || '/' } }));
-});
-
-self.addEventListener('notificationclick', (e) => {
-  e.notification.close();
-  const url = (e.notification.data && e.notification.data.url) || '/';
-  e.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then((cs) => {
-    const c = cs.find((x) => 'focus' in x);
-    if (c) { if ('navigate' in c) c.navigate(url); return c.focus(); }
-    return clients.openWindow(url);
-  }));
 });

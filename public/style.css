@@ -345,3 +345,8 @@ nav button.desk{display:flex}
 .wk-focus{background:var(--card2);border-radius:14px;padding:12px 14px}
 .wk-focus b{display:block;margin-bottom:6px}
 .wk-focus .steps li::before{background:var(--accent)}
+
+.ntfy-steps{margin:0 0 12px;padding-left:20px;font-size:14px;line-height:1.55;color:var(--mut)}
+.ntfy-steps li{margin:4px 0}.ntfy-steps b{color:var(--tx)}
+.ntfy-link{color:var(--accent);font-weight:600}
+code.topic{display:block;margin-top:6px;padding:8px 10px;border-radius:10px;background:var(--card2);color:var(--tx);font-size:12.5px;word-break:break-all;user-select:all}

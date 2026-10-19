@@ -178,7 +178,7 @@ function setupSteps() {
   if (!st.demoDeployment) steps.push({ done: !!st.connected, label: 'Connect your Fitbit', sub: 'Sign in with Google to load your own data', href: '/api/connect' });
   steps.push({ done: !!(p.age && p.sex), label: 'Add your age and sex', sub: 'Needed for Pulse Age', act: 'settings' });
   steps.push({ done: standalone, label: 'Add Pulse to your Home Screen', sub: 'In Safari: Share, then Add to Home Screen', act: 'hint' });
-  if (S.push?.supported) steps.push({ done: S.push.on, label: 'Turn on notifications', sub: 'Morning briefing and bedtime reminder', act: 'push' });
+  if (S.notify?.available) steps.push({ done: lsGet('pulse_ntfy_done') === '1', label: 'Turn on notifications', sub: 'Install the free ntfy app and subscribe', act: 'settings' });
   return steps;
 }
 function setupCard() {
@@ -439,7 +439,7 @@ async function load(refresh) {
       b.innerHTML = S.state.configured ? '<b>Demo mode.</b> Open Settings → Connect Fitbit to load your own data.' : `<b>Demo mode.</b> Set GOOGLE_CLIENT_ID/SECRET and DATABASE_URL to connect. Redirect URI: <code>${esc(S.state.redirectUri)}</code>`;
     } else b.classList.add('hidden');
     render();
-    if (!S.pushInit) { S.pushInit = true; pushInit().then(() => render()); }
+    if (!S.notifInit) { S.notifInit = true; notifInit().then(() => render()); }
   } finally { btn.classList.remove('spin'); }
 }
 
@@ -447,15 +447,14 @@ async function load(refresh) {
 document.addEventListener('click', (e) => {
   const ex = e.target.closest('[data-explain]');
   if (ex) { e.stopPropagation(); openExplain(ex.dataset.explain); return; }
-  const t = e.target.closest('[data-view],[data-go],[data-range],[data-q],[data-day],[data-act],#moreIns,#regen,#setProfile,#hideSetup,#openHealth,#pushOn,#pushOff,#pushTest,#weeklyAi');
+  const t = e.target.closest('[data-view],[data-go],[data-range],[data-q],[data-day],[data-act],#moreIns,#regen,#setProfile,#hideSetup,#openHealth,#ntfyTest,#ntfyCopy,#weeklyAi');
   if (!t) return;
-  if (t.id === 'pushOn') { enablePush(); return; }
-  if (t.id === 'pushOff') { disablePush(); return; }
-  if (t.id === 'pushTest') { fetch('/api/push/test', { method: 'POST' }).then(() => { t.textContent = 'Sent. Check your notifications'; }); return; }
+  if (t.id === 'ntfyTest') { t.textContent = 'Sending…'; fetch('/api/notify', { method: 'POST' }).then((r) => r.json()).then((j) => { t.textContent = j.sent ? 'Sent. Check ntfy' : 'Could not send'; if (j.sent) { lsSet('pulse_ntfy_done', '1'); render(); } }).catch(() => { t.textContent = 'Could not send'; }); return; }
+  if (t.id === 'ntfyCopy') { navigator.clipboard?.writeText(S.notify.topic).then(() => { t.textContent = 'Copied'; }).catch(() => {}); return; }
   if (t.id === 'weeklyAi') { ask('Write my weekly review: what went well, what to watch, and one focus for next week.'); return; }
   if (t.id === 'setProfile' || t.id === 'openHealth') { $('gear').click(); return; }
   if (t.id === 'hideSetup') { lsSet('pulse_setup_hidden', '1'); render(); return; }
-  if (t.dataset.act) { const k = t.dataset.act; if (k === 'settings') $('gear').click(); else if (k === 'hint') $('homeHint')?.classList.toggle('hidden'); else if (k === 'push' && typeof enablePush === 'function') enablePush(); return; }
+  if (t.dataset.act) { const k = t.dataset.act; if (k === 'settings') $('gear').click(); else if (k === 'hint') $('homeHint')?.classList.toggle('hidden'); return; }
   if (t.dataset.day) { const n = days().length; S.sel = t.dataset.day === 'today' ? null : clamp(selIdx() + +t.dataset.day, 0, n - 1); if (S.sel === n - 1) S.sel = null; render(); return; }
   if (t.dataset.view || t.dataset.go) { S.view = t.dataset.view || t.dataset.go; location.hash = S.view; render(); window.scrollTo(0, 0); }
   else if (t.dataset.range) { S.range = +t.dataset.range; render(); }
@@ -543,52 +542,24 @@ function weeklyCard() {
     ${S.data.aiEnabled ? '<button class="btn ghost" id="weeklyAi" style="margin-top:12px">Write it up with AI</button>' : ''}</div>`;
 }
 
-// ---- notifications (web push; needs the app on the Home Screen on iPhone) ----
-const urlB64 = (s) => { const p = '='.repeat((4 - (s.length % 4)) % 4), b = (s + p).replace(/-/g, '+').replace(/_/g, '/'), r = atob(b); return Uint8Array.from([...r].map((c) => c.charCodeAt(0))); };
-async function pushInit() {
-  const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
-  S.push = { supported, on: false, configured: false };
-  if (!supported) return;
-  try {
-    const reg = await navigator.serviceWorker.ready;
-    S.push.reg = reg;
-    const sub = await reg.pushManager.getSubscription();
-    S.push.on = !!sub && Notification.permission === 'granted';
-    S.push.configured = !!(await (await fetch('/api/push/key')).json()).configured;
-  } catch { S.push.supported = false; }
-}
-async function enablePush() {
-  try {
-    const perm = await Notification.requestPermission();
-    if (perm !== 'granted') { S.push.denied = true; refreshSettings(); return; }
-    const { key } = await (await fetch('/api/push/key')).json();
-    const sub = (await S.push.reg.pushManager.getSubscription()) || (await S.push.reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64(key) }));
-    const r = await fetch('/api/push/subscribe', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ subscription: sub.toJSON() }) });
-    S.push.on = r.ok;
-  } catch (e) { S.push.error = e.message; }
-  refreshSettings(); render();
-}
-async function disablePush() {
-  try {
-    const sub = await S.push.reg.pushManager.getSubscription();
-    if (sub) { await fetch('/api/push/subscribe', { method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ endpoint: sub.endpoint }) }); await sub.unsubscribe(); }
-    S.push.on = false;
-  } catch {}
-  refreshSettings(); render();
+// ---- notifications via ntfy (free app, no keys) ----
+async function notifInit() {
+  try { S.notify = await (await fetch('/api/notify')).json(); } catch { S.notify = { available: false }; }
 }
 const refreshSettings = () => { if ($('settings').open) $('settings-body').innerHTML = settingsBody(); };
 function notifHtml() {
-  const p = S.push;
-  const dem = S.state?.demoDeployment;
-  if (dem) return '';
-  let body;
-  if (!p || !p.supported) body = '<p class="sub" style="margin:0">Notifications need the app on your Home Screen (iPhone: Safari → Share → Add to Home Screen), then open it from there.</p>';
-  else if (!p.configured) body = '<p class="sub" style="margin:0">Add the VAPID keys in Vercel to enable notifications (see the README).</p>';
-  else if (p.denied) body = '<p class="sub" style="margin:0">Notifications are blocked. Allow them for Pulse in your device settings, then try again.</p>';
-  else if (p.on) body = '<p class="sub" style="margin:0 0 10px">On: a morning briefing and an evening bedtime reminder.</p><div style="display:flex;gap:8px"><button class="btn ghost" id="pushTest">Send a test</button><button class="btn red" id="pushOff">Turn off</button></div>';
-  else body = '<p class="sub" style="margin:0 0 10px">Get a morning briefing and an evening bedtime reminder.</p><button class="btn" id="pushOn">Turn on notifications</button>';
-  return `<div><div class="dolabel" style="margin-top:0">Notifications</div>${body}</div>`;
+  const n = S.notify;
+  if (S.state?.demoDeployment) return '';
+  if (!n || !n.available) return '<div><div class="dolabel" style="margin-top:0">Notifications</div><p class="sub" style="margin:0">Available once Pulse is connected to a database.</p></div>';
+  const done = lsGet('pulse_ntfy_done') === '1';
+  return `<div><div class="dolabel" style="margin-top:0">Notifications ${done ? '· set up' : ''}</div>
+    <p class="sub" style="margin:0 0 10px">A morning briefing, a bedtime reminder and a weekly review, delivered by the free ntfy app. No account needed.</p>
+    <ol class="ntfy-steps"><li>Install <b>ntfy</b> from the App Store.</li>
+    <li>Tap <a class="ntfy-link" href="${esc(n.subscribeUrl)}">Subscribe in ntfy</a>, or in the app tap + and enter this topic: <code class="topic">${esc(n.topic)}</code></li>
+    <li>Tap the button below to send a test.</li></ol>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="ntfyTest">Send a test</button><button class="btn ghost" id="ntfyCopy">Copy topic</button></div>
+    <p class="sub" style="margin:8px 0 0;font-size:12px">The topic is private, so keep it to yourself. Messages pass through ${esc(n.server.replace(/^https?:\/\//, ''))}; set NTFY_SERVER to use your own.</p></div>`;
 }
 
-// service worker: offline fallback + push
+// service worker: offline fallback
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
