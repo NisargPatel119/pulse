@@ -337,3 +337,11 @@ nav button.desk{display:flex}
 .zn{flex:1;font-size:14px}.zn small{display:block;color:var(--mut2);font-size:12px}
 .card{position:relative}
 .wk .m .zbar{margin-top:6px}
+
+/* weekly review */
+.wk-head{margin:0 0 4px;font-size:16px;font-weight:600}
+.wl li.win::before{background:var(--rec-hi)}
+.wl li.watch::before{background:var(--rec-lo)}
+.wk-focus{background:var(--card2);border-radius:14px;padding:12px 14px}
+.wk-focus b{display:block;margin-bottom:6px}
+.wk-focus .steps li::before{background:var(--accent)}

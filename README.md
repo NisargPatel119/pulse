@@ -20,6 +20,13 @@ Bevel reads Apple Health, which only exists on-device, so it needs a native iPho
 
 Data syncs when you open the app (if older than 30 min), on **Refresh**, and daily at 11:00 UTC via Vercel Cron.
 
+## Notifications (optional)
+Pulse sends a morning briefing (after the daily sync, ~7 AM US Eastern), a bedtime reminder (~9 PM Eastern) and a weekly review on Mondays.
+1. Add `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` (e.g. `mailto:you@example.com`) in Vercel. Generate keys with `npx web-push generate-vapid-keys`.
+2. On iPhone: open the site in Safari, Share, **Add to Home Screen**, then open it from the Home Screen (iOS only allows web push for installed apps).
+3. Settings (gear icon) -> **Turn on notifications**.
+Vercel Hobby crons run once a day at a fixed UTC time, so edit the two schedules in `vercel.json` to match your timezone. The same service worker keeps your last data viewable offline.
+
 ## What you get
 Six tabs, built to work as well on your iPhone as on a laptop:
 - **Today:** a one-screen glance: a one-line headline, Recovery/Sleep/Strain rings, today's strain vs target, tonight's bedtime, four vitals (HRV, resting HR, SpO2, steps), your Pulse Age, and anything that needs attention.

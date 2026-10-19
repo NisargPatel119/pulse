@@ -354,10 +354,10 @@ function viewInsights() {
   const items = S.data.insights;
   const list = `<div class="card"><h3>Insights for you <small>${items.length} active</small></h3>${items.length ? insightsList(items) : '<p class="sub">Insights appear once a few days of data have synced.</p>'}</div>`;
   if (!S.data.aiEnabled) {
-    return `<div class="stack">${list}<div class="card"><h3>AI coach <small>optional, free</small></h3><div class="md"><p>Add a free key from console.groq.com/keys as <code>GROQ_API_KEY</code> in Vercel and redeploy to get an AI morning briefing and a chat that answers questions using your real numbers.</p></div></div></div>`;
+    return `<div class="stack">${weeklyCard()}${list}<div class="card"><h3>AI coach <small>optional, free</small></h3><div class="md"><p>Add a free key from console.groq.com/keys as <code>GROQ_API_KEY</code> in Vercel and redeploy to get an AI morning briefing and a chat that answers questions using your real numbers.</p></div></div></div>`;
   }
   const chips = ['Why is my recovery what it is today?', 'Should I train hard today?', 'How can I improve my deep sleep?', 'Summarize my week', 'How can I lower my biological age?'];
-  return `<div class="stack"><div class="card"><h3>Morning briefing <button class="btn ghost" id="regen" style="padding:6px 12px;font-size:12px">Regenerate</button></h3><div class="md" id="brief">${S.brief ? md(S.brief) : '<div class="skeleton"></div><div class="skeleton" style="width:80%"></div>'}</div></div>
+  return `<div class="stack">${weeklyCard()}<div class="card"><h3>Morning briefing <button class="btn ghost" id="regen" style="padding:6px 12px;font-size:12px">Regenerate</button></h3><div class="md" id="brief">${S.brief ? md(S.brief) : '<div class="skeleton"></div><div class="skeleton" style="width:80%"></div>'}</div></div>
   ${list}
   <div class="card"><h3>Ask your coach</h3><div class="chat" id="chat">${S.chat.map((m) => `<div class="msg ${m.role === 'user' ? 'u' : 'a'}">${m.role === 'user' ? esc(m.content) : `<div class="md">${md(m.content)}</div>`}</div>`).join('') || '<p class="sub">Ask anything about your data.</p>'}</div>
   <div class="chips">${chips.map((c) => `<button data-q="${esc(c)}">${esc(c)}</button>`).join('')}</div>
@@ -420,6 +420,7 @@ function settingsBody() {
   <label>Age (for Pulse Age) <span><input id="age" type="number" min="16" max="100" step="1" value="${p.age ?? hs.age ?? ''}" placeholder="–"></span></label>
   <label>Sex (for Pulse Age) <span><select id="sex"><option value="" ${!(p.sex || hs.sex) ? 'selected' : ''}>–</option><option value="male" ${(p.sex || hs.sex) === 'male' ? 'selected' : ''}>Male</option><option value="female" ${(p.sex || hs.sex) === 'female' ? 'selected' : ''}>Female</option></select></span></label>
   <div class="dh">${dataHealthHtml()}</div>
+  ${notifHtml()}
   ${S.state?.connected ? '<form method="post" action="/api/disconnect" onsubmit="return confirm(\'Disconnect and delete stored Fitbit data?\')"><button class="btn red">Disconnect Fitbit</button></form>' : (S.state?.demoDeployment ? '' : '<a class="btn" href="/api/connect" style="text-align:center;text-decoration:none">Connect Fitbit</a>')}
   ${S.state?.demoDeployment ? '' : '<form method="post" action="/api/logout"><button class="btn ghost" style="width:100%">Sign out</button></form>'}`;
 }
@@ -438,6 +439,7 @@ async function load(refresh) {
       b.innerHTML = S.state.configured ? '<b>Demo mode.</b> Open Settings → Connect Fitbit to load your own data.' : `<b>Demo mode.</b> Set GOOGLE_CLIENT_ID/SECRET and DATABASE_URL to connect. Redirect URI: <code>${esc(S.state.redirectUri)}</code>`;
     } else b.classList.add('hidden');
     render();
+    if (!S.pushInit) { S.pushInit = true; pushInit().then(() => render()); }
   } finally { btn.classList.remove('spin'); }
 }
 
@@ -445,8 +447,12 @@ async function load(refresh) {
 document.addEventListener('click', (e) => {
   const ex = e.target.closest('[data-explain]');
   if (ex) { e.stopPropagation(); openExplain(ex.dataset.explain); return; }
-  const t = e.target.closest('[data-view],[data-go],[data-range],[data-q],[data-day],[data-act],#moreIns,#regen,#setProfile,#hideSetup,#openHealth');
+  const t = e.target.closest('[data-view],[data-go],[data-range],[data-q],[data-day],[data-act],#moreIns,#regen,#setProfile,#hideSetup,#openHealth,#pushOn,#pushOff,#pushTest,#weeklyAi');
   if (!t) return;
+  if (t.id === 'pushOn') { enablePush(); return; }
+  if (t.id === 'pushOff') { disablePush(); return; }
+  if (t.id === 'pushTest') { fetch('/api/push/test', { method: 'POST' }).then(() => { t.textContent = 'Sent. Check your notifications'; }); return; }
+  if (t.id === 'weeklyAi') { ask('Write my weekly review: what went well, what to watch, and one focus for next week.'); return; }
   if (t.id === 'setProfile' || t.id === 'openHealth') { $('gear').click(); return; }
   if (t.id === 'hideSetup') { lsSet('pulse_setup_hidden', '1'); render(); return; }
   if (t.dataset.act) { const k = t.dataset.act; if (k === 'settings') $('gear').click(); else if (k === 'hint') $('homeHint')?.classList.toggle('hidden'); else if (k === 'push' && typeof enablePush === 'function') enablePush(); return; }
@@ -520,3 +526,69 @@ function stressCard() {
   const col = (v) => (v >= 2 ? css('--rec-lo') : v >= 1 ? css('--rec-mid') : css('--rec-hi'));
   return `<div class="card"><h3>Daytime stress ${ib('stress')}</h3><div style="display:flex;align-items:baseline;gap:10px;margin-bottom:8px"><span class="big">${d.stress.toFixed(1)}</span><span class="sub">of 3 · ${word}</span></div>${C.hourly(d.stressHours, { colorFn: col, patFn: (v) => (v >= 2 ? 'p-low' : null), label: 'daytime stress by hour' })}<div class="legend"><span><i class="sw lv-hi"></i>Low</span><span><i class="sw lv-mid"></i>Moderate</span><span><i class="sw lv-lo"></i>High</span></div><p class="sub" style="margin:8px 0 0">From your heart rate while sitting still, compared with your resting rate. Automatic, nothing to log.</p></div>`;
 }
+
+// ---- weekly review card (Insights tab) ----
+function weeklyCard() {
+  const w = S.data.weekly;
+  if (!w) return '';
+  const t = w.totals;
+  const li = (items, cls) => items.map((x) => `<li class="${cls}">${esc(x)}</li>`).join('');
+  return `<div class="card"><h3>Weekly review <small>${fmtDay(w.from)} – ${fmtDay(w.to)}</small></h3>
+    <p class="wk-head">${esc(w.headline)}</p>
+    <div class="kv" style="grid-template-columns:repeat(auto-fit,minmax(96px,1fr))"><div><small>Recovery</small><b>${t.recovery ?? '–'}%</b></div><div><small>Sleep</small><b>${fmtH(t.sleep)}</b></div><div><small>Strain</small><b>${t.strain ?? '–'}</b></div><div><small>Steps/day</small><b>${t.steps?.toLocaleString() ?? '–'}</b></div><div><small>Workouts</small><b>${t.workouts}</b></div></div>
+    ${w.wins.length ? `<div class="dolabel">Went well</div><ul class="steps wl">${li(w.wins, 'win')}</ul>` : ''}
+    ${w.watch.length ? `<div class="dolabel">Watch</div><ul class="steps wl">${li(w.watch, 'watch')}</ul>` : ''}
+    ${w.best ? `<div class="sub" style="margin-top:10px">Best day ${fmtDay(w.best.date)} (${w.best.recovery}%) · toughest ${fmtDay(w.worst.date)} (${w.worst.recovery}%)</div>` : ''}
+    ${w.focus ? `<div class="dolabel">Next week's focus</div><div class="wk-focus"><b>${esc(w.focus.title)}</b><ul class="steps">${w.focus.steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ul></div>` : ''}
+    ${S.data.aiEnabled ? '<button class="btn ghost" id="weeklyAi" style="margin-top:12px">Write it up with AI</button>' : ''}</div>`;
+}
+
+// ---- notifications (web push; needs the app on the Home Screen on iPhone) ----
+const urlB64 = (s) => { const p = '='.repeat((4 - (s.length % 4)) % 4), b = (s + p).replace(/-/g, '+').replace(/_/g, '/'), r = atob(b); return Uint8Array.from([...r].map((c) => c.charCodeAt(0))); };
+async function pushInit() {
+  const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  S.push = { supported, on: false, configured: false };
+  if (!supported) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    S.push.reg = reg;
+    const sub = await reg.pushManager.getSubscription();
+    S.push.on = !!sub && Notification.permission === 'granted';
+    S.push.configured = !!(await (await fetch('/api/push/key')).json()).configured;
+  } catch { S.push.supported = false; }
+}
+async function enablePush() {
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { S.push.denied = true; refreshSettings(); return; }
+    const { key } = await (await fetch('/api/push/key')).json();
+    const sub = (await S.push.reg.pushManager.getSubscription()) || (await S.push.reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64(key) }));
+    const r = await fetch('/api/push/subscribe', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ subscription: sub.toJSON() }) });
+    S.push.on = r.ok;
+  } catch (e) { S.push.error = e.message; }
+  refreshSettings(); render();
+}
+async function disablePush() {
+  try {
+    const sub = await S.push.reg.pushManager.getSubscription();
+    if (sub) { await fetch('/api/push/subscribe', { method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ endpoint: sub.endpoint }) }); await sub.unsubscribe(); }
+    S.push.on = false;
+  } catch {}
+  refreshSettings(); render();
+}
+const refreshSettings = () => { if ($('settings').open) $('settings-body').innerHTML = settingsBody(); };
+function notifHtml() {
+  const p = S.push;
+  const dem = S.state?.demoDeployment;
+  if (dem) return '';
+  let body;
+  if (!p || !p.supported) body = '<p class="sub" style="margin:0">Notifications need the app on your Home Screen (iPhone: Safari → Share → Add to Home Screen), then open it from there.</p>';
+  else if (!p.configured) body = '<p class="sub" style="margin:0">Add the VAPID keys in Vercel to enable notifications (see the README).</p>';
+  else if (p.denied) body = '<p class="sub" style="margin:0">Notifications are blocked. Allow them for Pulse in your device settings, then try again.</p>';
+  else if (p.on) body = '<p class="sub" style="margin:0 0 10px">On: a morning briefing and an evening bedtime reminder.</p><div style="display:flex;gap:8px"><button class="btn ghost" id="pushTest">Send a test</button><button class="btn red" id="pushOff">Turn off</button></div>';
+  else body = '<p class="sub" style="margin:0 0 10px">Get a morning briefing and an evening bedtime reminder.</p><button class="btn" id="pushOn">Turn on notifications</button>';
+  return `<div><div class="dolabel" style="margin-top:0">Notifications</div>${body}</div>`;
+}
+
+// service worker: offline fallback + push
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});

@@ -3,6 +3,7 @@ import { connected, fetchDays } from './health';
 import { enrich, insights, analytics } from './scores';
 import { demoDays } from './demo';
 import { healthspan } from './healthspan';
+import { weeklyReview } from './weekly';
 
 export const isDemoDeployment = () => process.env.DEMO_MODE === 'true' || process.env.DEMO_MODE === '1';
 const STALE_MS = 30 * 60 * 1000;
@@ -49,9 +50,10 @@ export async function payload({ refresh = false, demo = false } = {}) {
   // Demo mode shows a sample profile so Healthspan is visible
   const hsPrefs = source === 'demo' ? { age: 34, sex: 'male', ...prefs } : prefs;
   enrich(days, prefs);
+  const ins = insights(days, prefs), an = analytics(days, prefs), hs = healthspan(days, hsPrefs);
   return {
     source, fetchedAt: meta.fetchedAt, prefs, days,
-    insights: insights(days, prefs), analytics: analytics(days, prefs), healthspan: healthspan(days, hsPrefs),
+    insights: ins, analytics: an, healthspan: hs, weekly: weeklyReview(days, an, hs, ins),
     status: meta.status ?? {}, sample: meta.sample,
     aiEnabled: !!process.env.GROQ_API_KEY,
   };
