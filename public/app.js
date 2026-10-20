@@ -87,17 +87,46 @@ const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return nu
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
 const fmtDay = (date) => new Date(date + 'T12:00:00').toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
 const DAY_VIEWS = ['today', 'sleep', 'recovery', 'activity'];
+const isoDay = (d) => d.toLocaleDateString('en-CA');
+const todayStr = () => isoDay(new Date());
+const yesterdayStr = () => { const d = new Date(); d.setDate(d.getDate() - 1); return isoDay(d); };
+const dayShort = (date) => fmtDay(date).replace(/^[A-Za-z]+, /, '');
+const relDay = (date) => (date === todayStr() ? 'Today' : date === yesterdayStr() ? 'Yesterday' : fmtDay(date));
+const ago = (iso) => {
+  const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 24 * 60 ? `${Math.round(m / 60)}h ago` : tf(iso);
+};
+// true when the newest day we have is not today, or today has no recovery yet (sleep hasn't reached Google)
+function waitingForToday() {
+  if (!S.data || S.data.source === 'demo' || !days().length || new Date().getHours() < 4) return false;
+  const t = days()[days().length - 1];
+  return t.date !== todayStr() || t.recovery == null;
+}
+function waitCard(rec, t) {
+  if (!isToday() || !waitingForToday()) return '';
+  const paused = (S.autoChecks || 0) >= 12;
+  return `<div class="card wait"><div class="wt"><b>Today's data isn't in yet</b><span class="sub">Showing ${rec ? 'recovery from ' + dayShort(rec.date) : 'your latest data'}. Sync your band in the Fitbit or Google Health app and Pulse will pick it up${paused ? '' : ' automatically'}. Last checked ${ago(S.data.fetchedAt)}.</span></div><button class="btn ghost" id="checkAgain">Check again</button></div>`;
+}
+function renderBadge() {
+  if (!S.data) return;
+  const demo = S.data.source === 'demo';
+  const label = demo ? 'Demo data' : S.syncing ? 'Syncing…' : 'Synced ' + ago(S.data.fetchedAt);
+  $('date').textContent = new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' }) + (matchMedia('(max-width:860px)').matches ? ' · ' + label : '');
+  $('badge').textContent = label;
+  $('badge').className = 'badge' + (demo ? ' demo' : '');
+}
 
 function dateBar() {
   const i = selIdx(), n = days().length, d = days()[i];
   return `<button class="dnav" data-day="-1" ${i <= 0 ? 'disabled' : ''} aria-label="Previous day">‹</button>
-    <div class="dlabel"><b>${isToday() ? 'Today' : fmtDay(d.date)}</b>${isToday() ? `<span>${fmtDay(d.date)}</span>` : ''}</div>
+    <div class="dlabel"><b>${relDay(d.date)}</b>${d.date === todayStr() || d.date === yesterdayStr() ? `<span>${fmtDay(d.date)}</span>` : ''}</div>
     <button class="dnav" data-day="1" ${i >= n - 1 ? 'disabled' : ''} aria-label="Next day">›</button>
     ${isToday() ? '' : '<button class="chip jump" data-day="today">Back to today</button>'}`;
 }
 
 function headline(rec, t, a) {
   if (!isToday()) return `${rec ? `Recovery ${rec.recovery}% (${recWord(rec.recovery)})` : 'No recovery score'}${t?.strain != null ? ` · strain ${t.strain.toFixed(1)}` : ''}.`;
+  if (waitingForToday() && rec) return `Waiting for last night's data. Latest recovery: ${rec.recovery}% on ${dayShort(rec.date)}.`;
   if (!rec) return 'Building your baseline. Check back in a few days.';
   const [lo, hi] = a.targetStrain;
   return rec.recovery >= 67 ? `Primed. Go hard today (strain ${lo}–${hi}).` : rec.recovery >= 34 ? `Moderate. Train steady (strain ${lo}–${hi}).` : `Low recovery. Keep it easy (strain under ${hi}).`;
@@ -203,8 +232,8 @@ function viewToday() {
   const rec = lastWith((d) => d.recovery != null), sl = lastWith((d) => d.sleepScore != null), t = last();
   const a = A(), plan = a.sleepPlan, today = isToday();
   const hero = `<div class="hero">
-    ${ringCard('recovery', 'Recovery', { value: rec?.recovery, max: 100, color: rec ? recColor(rec.recovery) : css('--line'), color2: rec ? recColor(rec.recovery) : css('--line'), text: rec ? rec.recovery + '%' : '–', size: 190 }, rec ? recWord(rec.recovery) : 'Needs ~5 days of data', rec ? recColor(rec.recovery) : 'transparent')}
-    ${ringCard('sleep', 'Sleep', { value: sl?.sleepScore, max: 100, color: css('--sleep'), color2: css('--sleep2'), text: sl ? sl.sleepScore + '%' : '–', size: 190 }, sl ? fmtH(sl.sleep.asleep) : 'No sleep yet', css('--sleep'))}
+    ${ringCard('recovery', 'Recovery', { value: rec?.recovery, max: 100, color: rec ? recColor(rec.recovery) : css('--line'), color2: rec ? recColor(rec.recovery) : css('--line'), text: rec ? rec.recovery + '%' : '–', size: 190 }, rec ? recWord(rec.recovery) + (t && rec.date !== t.date ? ' · ' + dayShort(rec.date) : '') : 'Needs ~5 days of data', rec ? recColor(rec.recovery) : 'transparent')}
+    ${ringCard('sleep', 'Sleep', { value: sl?.sleepScore, max: 100, color: css('--sleep'), color2: css('--sleep2'), text: sl ? sl.sleepScore + '%' : '–', size: 190 }, sl ? fmtH(sl.sleep.asleep) + (t && sl.date !== t.date ? ' · ' + dayShort(sl.date) : '') : 'No sleep yet', css('--sleep'))}
     ${ringCard('activity', 'Strain', { value: t?.strain, max: 21, color: css('--strain'), color2: css('--strain2'), text: t?.strain != null ? t.strain.toFixed(1) : '–', size: 190 }, a.targetStrain ? `target ${a.targetStrain[0]}–${a.targetStrain[1]}` : 'of 21', css('--strain'))}
   </div>`;
   const second = today
@@ -215,7 +244,7 @@ function viewToday() {
     ${second}
   </div>`;
   const attn = today ? `<div class="card"><h3>Needs attention <small><button class="more" data-go="insights" style="padding:0;min-height:0">All insights ›</button></small></h3>${attention()}</div>` : '';
-  return `<div class="stack">${setupCard()}<p class="headline">${headline(rec, t, a)}</p>${hero}${glance}<div class="vitals">${vitalTiles()}</div>${healthTile()}${attn}</div>`;
+  return `<div class="stack"><p class="headline">${headline(rec, t, a)}</p>${waitCard(rec, t)}${setupCard()}${hero}${glance}<div class="vitals">${vitalTiles()}</div>${healthTile()}${attn}</div>`;
 }
 
 const LEVER_TIPS = {
@@ -376,10 +405,7 @@ function render() {
   if (!S.data) return;
   const hour = new Date().getHours();
   $('title').textContent = S.view === 'today' ? (isToday() ? (hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening') : 'Day review') : ALL_VIEWS.find(([k]) => k === S.view)[1];
-  const sync = S.data.source === 'demo' ? 'Demo data' : 'Synced ' + tf(S.data.fetchedAt);
-  $('date').textContent = new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' }) + (matchMedia('(max-width:860px)').matches ? ' · ' + sync : '');
-  $('badge').textContent = S.data.source === 'demo' ? 'Demo data' : 'Synced ' + tf(S.data.fetchedAt);
-  $('badge').className = 'badge' + (S.data.source === 'demo' ? ' demo' : '');
+  renderBadge();
   renderNav();
   const dv = DAY_VIEWS.includes(S.view); $('datebar').innerHTML = dv ? dateBar() : ''; $('datebar').classList.toggle('hidden', !dv);
   $('view').innerHTML = RENDER[S.view]();
@@ -426,30 +452,43 @@ function settingsBody() {
   ${S.state?.demoDeployment ? '' : '<form method="post" action="/api/logout"><button class="btn ghost" style="width:100%">Sign out</button></form>'}`;
 }
 
-async function load(refresh) {
+// ---- freshness: always show what is stored right away, then quietly check Google for anything newer ----
+const sigOf = (d) => JSON.stringify(d.days.slice(-2).map((x) => [x.date, x.recovery, x.sleep?.asleep, x.steps, x.hrv, x.rhr, x.strain, x.stress]));
+
+async function load(refresh, quiet) {
+  if (S.loading) return;
+  S.loading = true;
   const btn = $('refresh'); btn.classList.add('spin');
+  if (S.data) { S.syncing = true; renderBadge(); }
   try {
     S.state = await (await fetch('/api/state')).json();
     const r = await fetch('/api/data' + (refresh ? '?refresh=1' : ''));
     const data = await r.json();
-    if (data.error) { $('banner').classList.remove('hidden'); $('banner').innerHTML = 'Error: ' + esc(data.error); return; }
+    if (data.error) { if (!quiet || !S.data) { $('banner').classList.remove('hidden'); $('banner').innerHTML = 'Error: ' + esc(data.error); } return; }
+    const changed = !S.data || sigOf(data) !== sigOf(S.data);
     S.data = data;
     const b = $('banner');
     if (!S.state.connected && !S.state.demoDeployment) {
       b.classList.remove('hidden');
       b.innerHTML = S.state.configured ? '<b>Demo mode.</b> Open Settings → Connect Fitbit to load your own data.' : `<b>Demo mode.</b> Set GOOGLE_CLIENT_ID/SECRET and DATABASE_URL to connect. Redirect URI: <code>${esc(S.state.redirectUri)}</code>`;
     } else b.classList.add('hidden');
-    render();
+    if (changed || !quiet) render();
     if (!S.notifInit) { S.notifInit = true; notifInit().then(() => render()); }
-  } finally { btn.classList.remove('spin'); }
+    if (!S.firstDone) { S.firstDone = true; setTimeout(() => maybeRefresh('open'), 800); }
+  } catch (e) {
+    if (!S.data) { $('banner').classList.remove('hidden'); $('banner').innerHTML = 'Could not load your data. Check your connection and try again.'; }
+  } finally {
+    S.loading = false; S.syncing = false; btn.classList.remove('spin'); renderBadge();
+  }
 }
 
 // ---------- events ----------
 document.addEventListener('click', (e) => {
   const ex = e.target.closest('[data-explain]');
   if (ex) { e.stopPropagation(); openExplain(ex.dataset.explain); return; }
-  const t = e.target.closest('[data-view],[data-go],[data-range],[data-q],[data-day],[data-act],#moreIns,#regen,#setProfile,#hideSetup,#openHealth,#ntfyTest,#ntfyCopy,#weeklyAi');
+  const t = e.target.closest('[data-view],[data-go],[data-range],[data-q],[data-day],[data-act],#moreIns,#regen,#setProfile,#hideSetup,#openHealth,#ntfyTest,#ntfyCopy,#weeklyAi,#checkAgain');
   if (!t) return;
+  if (t.id === 'checkAgain') { S.autoChecks = 0; maybeRefresh('manual'); return; }
   if (t.id === 'ntfyTest') { t.textContent = 'Sending…'; fetch('/api/notify', { method: 'POST' }).then((r) => r.json()).then((j) => { t.textContent = j.sent ? 'Sent. Check ntfy' : 'Could not send'; if (j.sent) { lsSet('pulse_ntfy_done', '1'); render(); } }).catch(() => { t.textContent = 'Could not send'; }); return; }
   if (t.id === 'ntfyCopy') { navigator.clipboard?.writeText(S.notify.topic).then(() => { t.textContent = 'Copied'; }).catch(() => {}); return; }
   if (t.id === 'weeklyAi') { ask('Write my weekly review: what went well, what to watch, and one focus for next week.'); return; }
@@ -594,3 +633,20 @@ document.addEventListener('change', (e) => { if (e.target.id === 'zoom') { const
 document.addEventListener('click', (e) => { if (e.target.id === 'zoomReset') { applyZoom(100); const sl = document.getElementById('zoom'); if (sl) sl.value = 100; e.target.hidden = true; render(); } });
 applyTiny();
 addEventListener('resize', applyTiny);
+
+// ---- background refresh: when the app opens or returns to the foreground, and while waiting for today's data ----
+const FRESH_MS = 5 * 60 * 1000;
+function maybeRefresh(trigger) {
+  if (!S.data || S.data.source === 'demo' || S.loading || document.hidden) return;
+  const age = Date.now() - new Date(S.data.fetchedAt).getTime();
+  const force = trigger === 'manual';
+  const stale = trigger !== 'tick' && age > FRESH_MS;
+  const waiting = waitingForToday() && (S.autoChecks || 0) < 12 && Date.now() - (S.lastCheck || 0) > 90000;
+  if (!(force || stale || waiting)) return;
+  S.lastCheck = Date.now();
+  if (waiting && !force && !stale) S.autoChecks = (S.autoChecks || 0) + 1;
+  load(true, true);
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) maybeRefresh('visible'); });
+addEventListener('online', () => maybeRefresh('visible'));
+setInterval(() => { renderBadge(); maybeRefresh('tick'); }, 60000);

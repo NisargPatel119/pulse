@@ -9,6 +9,8 @@ export function morningMessage(p): PushMessage {
   const a = p.analytics;
   const alert = p.insights.find((i) => i.level === 'alert');
   if (!rec) return { title: 'Good morning', body: 'Your Pulse briefing is ready.', url: '/#today', tag: 'sunrise' };
+  const todayInTz = new Date().toLocaleDateString('en-CA', { timeZone: process.env.PULSE_TZ || 'America/New_York' });
+  if (rec.date !== todayInTz) return { title: "Last night's sleep hasn't synced", body: 'Sync your Fitbit, then open Pulse for today\'s recovery.', url: '/#today', tag: 'hourglass_flowing_sand' };
   const r = rec.recovery, [lo, hi] = a.targetStrain || [0, 21];
   const word = r >= 67 ? 'Primed' : r >= 34 ? 'Moderate' : 'Take it easy';
   const plan = r >= 67 ? `Go hard today (strain ${lo}–${hi}).` : r >= 34 ? `Train steady (strain ${lo}–${hi}).` : `Keep it easy (strain under ${hi}).`;

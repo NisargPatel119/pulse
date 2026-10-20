@@ -6,7 +6,6 @@ import { healthspan } from './healthspan';
 import { weeklyReview } from './weekly';
 
 export const isDemoDeployment = () => process.env.DEMO_MODE === 'true' || process.env.DEMO_MODE === '1';
-const STALE_MS = 30 * 60 * 1000;
 
 export async function getPrefs() {
   if (!process.env.DATABASE_URL) return { sleepNeedHours: 8 };
@@ -42,7 +41,7 @@ export async function payload({ refresh = false, demo = false } = {}) {
     meta = { fetchedAt: new Date().toISOString() };
   } else {
     meta = (await getKv('sync_meta')) ?? {};
-    if (refresh || !meta.fetchedAt || Date.now() - new Date(meta.fetchedAt).getTime() > STALE_MS) {
+    if (refresh || !meta.fetchedAt) { // otherwise the app shows stored data instantly and asks for a refresh in the background
       try { meta = await sync(); } catch (e: any) { meta = { ...meta, status: { sync: { ok: false, error: e.message } } }; }
     }
     days = await loadDays(200);

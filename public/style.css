@@ -379,3 +379,9 @@ html.tiny nav button{font-size:9.5px;padding:7px 2px}
 html.tiny .wk .st2 div:nth-child(n+2){display:none}
 
 .sheet-body select{background:var(--card2);color:var(--tx);border:1px solid var(--line);border-radius:10px;padding:9px 10px;font:inherit}
+
+/* "today's data isn't in yet" notice */
+.wait{display:flex;align-items:center;gap:14px;border-left:4px solid var(--rec-mid);padding:14px 16px}
+.wait .wt{flex:1;min-width:0}.wait .wt b{display:block;margin-bottom:2px}.wait .wt .sub{display:block;font-size:13px;line-height:1.45}
+.wait .btn{flex:none;white-space:nowrap}
+@media(max-width:560px){.wait{flex-direction:column;align-items:stretch}.wait .btn{width:100%}}
