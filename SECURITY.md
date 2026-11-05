@@ -4,7 +4,9 @@ Pulse handles personal health data, so security reports are taken seriously.
 
 ## Reporting a vulnerability
 
-Please **do not open a public issue** for a security problem. Instead, use GitHub's private reporting: on the repository's **Security** tab choose **Report a vulnerability**. Include what you found, how to reproduce it, and the impact. You will get a response as soon as the maintainer can, and credit in the fix if you want it.
+Please **do not put details of a security problem in a public issue**. Instead, use GitHub's private reporting: on the repository's **Security** tab choose **Report a vulnerability**. Include what you found, how to reproduce it, and the impact. You will get a response as soon as the maintainer can, and credit in the fix if you want it.
+
+If that button isn't available, open a public issue titled "Security contact request" with **no details**, and the maintainer will arrange a private channel.
 
 ## What is in scope
 
