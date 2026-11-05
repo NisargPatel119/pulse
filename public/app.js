@@ -98,7 +98,7 @@ const ago = (iso) => {
 };
 // true when the newest day we have is not today, or today has no recovery yet (sleep hasn't reached Google)
 function waitingForToday() {
-  if (!S.data || S.data.source === 'demo' || !days().length || new Date().getHours() < 4) return false;
+  if (!S.data || S.data.source === 'demo' || S.data.auth?.expired || !days().length || new Date().getHours() < 4) return false;
   const t = days()[days().length - 1];
   return t.date !== todayStr() || t.recovery == null;
 }
@@ -110,7 +110,7 @@ function waitCard(rec, t) {
 function renderBadge() {
   if (!S.data) return;
   const demo = S.data.source === 'demo';
-  const label = demo ? 'Demo data' : S.syncing ? 'Syncing…' : 'Synced ' + ago(S.data.fetchedAt);
+  const label = demo ? 'Demo data' : S.syncing ? 'Syncing…' : S.data.auth?.expired ? 'Not syncing' : 'Synced ' + ago(S.data.fetchedAt);
   $('date').textContent = new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' }) + (matchMedia('(max-width:860px)').matches ? ' · ' + label : '');
   $('badge').textContent = label;
   $('badge').className = 'badge' + (demo ? ' demo' : '');
@@ -192,11 +192,12 @@ function dataHealth() {
 }
 function dataHealthHtml() {
   const { rows } = dataHealth();
+  const expired = S.data.auth?.expired ? `<div class="dhr miss"><span class="dhi">✕</span><div><b>Google connection expired</b><span class="sub">Pulse can't read new data. <a class="ntfy-link" href="/api/connect">Reconnect to Google</a></span></div></div>` : '';
   const sym = { ok: '✓', part: '!', miss: '✕', opt: '–' };
   const list = rows.map((r) => `<div class="dhr ${r.status}"><span class="dhi">${sym[r.status]}</span><div><b>${r.label}</b><span class="sub">${r.status === 'opt' ? 'Not reported yet (optional)' : `${r.n} of ${r.total} days`}${r.status === 'part' || r.status === 'miss' ? ` · ${r.tip}` : ''}</span></div></div>`).join('');
   const st = S.data.status || {};
   const api = Object.keys(st).length ? `<div class="sub" style="margin-top:10px">Last sync: ${Object.entries(st).map(([k, v]) => `${esc(k)} ${v.ok ? `✓ ${v.count}` : `<span class="er">✕ ${esc(v.error)}</span>`}`).join(' · ')}</div>` : '';
-  return `<div class="dolabel" style="margin-top:0">Data health (last 30 days)</div>${list}${api}`;
+  return `<div class="dolabel" style="margin-top:0">Data health (last 30 days)</div>${expired}${list}${api}`;
 }
 
 // ---- setup checklist ----
@@ -204,7 +205,7 @@ function setupSteps() {
   const standalone = window.navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
   const p = S.data.prefs || {}, st = S.state || {};
   const steps = [];
-  if (!st.demoDeployment) steps.push({ done: !!st.connected, label: 'Connect your Fitbit', sub: 'Sign in with Google to load your own data', href: '/api/connect' });
+  if (!st.demoDeployment) steps.push({ done: !!st.connected && !S.data?.auth?.expired, label: S.data?.auth?.expired ? 'Reconnect to Google' : 'Connect your Fitbit', sub: 'Sign in with Google to load your own data', href: '/api/connect' });
   steps.push({ done: !!(p.age && p.sex), label: 'Add your age and sex', sub: 'Needed for Pulse Age', act: 'settings' });
   steps.push({ done: standalone, label: 'Add Pulse to your Home Screen', sub: 'In Safari: Share, then Add to Home Screen', act: 'hint' });
   if (S.notify?.available) steps.push({ done: lsGet('pulse_ntfy_done') === '1', label: 'Turn on notifications', sub: 'Install the free ntfy app and subscribe', act: 'settings' });
@@ -468,10 +469,15 @@ async function load(refresh, quiet) {
     const changed = !S.data || sigOf(data) !== sigOf(S.data);
     S.data = data;
     const b = $('banner');
-    if (!S.state.connected && !S.state.demoDeployment) {
+    if (S.data.auth?.expired) {
+      b.className = 'banner err';
+      b.innerHTML = `<div><b>Pulse lost its connection to Google.</b><br><span class="sub">${days().length ? 'Your latest Fitbit data is from ' + fmtDay(days()[days().length - 1].date) + '. ' : ''}Everything already saved is still here. Reconnecting takes a few seconds.</span></div><a class="btn" href="/api/connect">Reconnect to Google</a>`;
+    } else if (!S.state.connected && !S.state.demoDeployment) {
+      b.className = 'banner';
       b.classList.remove('hidden');
       b.innerHTML = S.state.configured ? '<b>Demo mode.</b> Open Settings → Connect Fitbit to load your own data.' : `<b>Demo mode.</b> Set GOOGLE_CLIENT_ID/SECRET and DATABASE_URL to connect. Redirect URI: <code>${esc(S.state.redirectUri)}</code>`;
     } else b.classList.add('hidden');
+    if (S.data.auth?.expired) b.classList.remove('hidden');
     if (changed || !quiet) render();
     if (!S.notifInit) { S.notifInit = true; notifInit().then(() => render()); }
     if (!S.firstDone) { S.firstDone = true; setTimeout(() => maybeRefresh('open'), 800); }
@@ -638,6 +644,7 @@ addEventListener('resize', applyTiny);
 const FRESH_MS = 5 * 60 * 1000;
 function maybeRefresh(trigger) {
   if (!S.data || S.data.source === 'demo' || S.loading || document.hidden) return;
+  if (S.data.auth?.expired && trigger !== 'manual') return;
   const age = Date.now() - new Date(S.data.fetchedAt).getTime();
   const force = trigger === 'manual';
   const stale = trigger !== 'tick' && age > FRESH_MS;

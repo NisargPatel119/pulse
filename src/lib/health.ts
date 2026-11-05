@@ -5,6 +5,9 @@ import crypto from 'node:crypto';
 import { getKv, setKv, delKv } from './db';
 
 const BASE = 'https://health.googleapis.com/v4';
+
+// Thrown when Google says the saved login is no longer valid (expired, revoked, or rejected)
+class AuthError extends Error { constructor(m) { super(m); this.name = 'AuthError'; } }
 const SCOPES = ['sleep', 'health_metrics_and_measurements', 'activity_and_fitness', 'profile']
   .map((s) => `https://www.googleapis.com/auth/googlehealth.${s}.readonly`);
 
@@ -29,7 +32,7 @@ async function tokenRequest(params) {
   const body = new URLSearchParams({ client_id: clientId, ...(clientSecret ? { client_secret: clientSecret } : {}), ...params });
   const r = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body });
   const j = await r.json();
-  if (!r.ok) throw new Error(`Token error: ${j.error_description || j.error}`);
+  if (!r.ok) { const msg = `Token error: ${j.error_description || j.error}`; throw (j.error === 'invalid_grant' ? new AuthError(msg) : new Error(msg)); }
   return j;
 }
 
@@ -39,6 +42,7 @@ export async function handleCallback(query) {
   const j = await tokenRequest({ code: query.code, grant_type: 'authorization_code', redirect_uri: pending.redirectUri, code_verifier: pending.verifier });
   await delKv('oauth_pending');
   await setKv('tokens', { refresh_token: j.refresh_token, access_token: j.access_token, expires_at: Date.now() + j.expires_in * 1000 - 60000 });
+  await delKv('auth_state'); // a fresh login clears any 'reconnect needed' flag
 }
 
 export const connected = async () => !!(await getKv('tokens'))?.refresh_token;
@@ -57,6 +61,7 @@ export async function api(pathAndQuery) {
   const r = await fetch(`${BASE}${pathAndQuery}`, { headers: { authorization: `Bearer ${await accessToken()}` } });
   const text = await r.text();
   let j; try { j = JSON.parse(text); } catch { j = { raw: text }; }
+  if (r.status === 401) throw new AuthError('Google rejected the saved login (401)');
   if (!r.ok) throw new Error(`${r.status} ${j.error?.message || text.slice(0, 200)}`);
   return j;
 }
@@ -199,7 +204,7 @@ export async function fetchDays(n = 35, opts: { hrDays?: number; hrMax?: number 
   const sinceDate = new Date(Date.now() - (n + 1) * 864e5);
   const since = sinceDate.toISOString(), sinceD = sinceDate.toLocaleDateString('en-CA', { timeZone: TZ });
   const status = {};
-  const run = async (name, fn) => { try { const v = await fn(); status[name] = { ok: true, count: v.length }; return v; } catch (e) { status[name] = { ok: false, error: e.message }; return []; } };
+  const run = async (name, fn) => { try { const v = await fn(); status[name] = { ok: true, count: v.length }; return v; } catch (e) { status[name] = { ok: false, error: e.message, auth: e?.name === 'AuthError' }; return []; } };
 
   const hrSince = new Date(Date.now() - ((opts.hrDays || 7) + 1) * 864e5).toISOString();
   const [sleeps, rhr, hrv, spo2, resp, steps, azm, ex, temp, vo2, hrPts] = await Promise.all([

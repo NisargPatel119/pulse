@@ -21,8 +21,20 @@ export async function sync() {
   const full = have < 30 || !(prev?.backfill >= 180); // one-time deeper backfill for existing installs
   const age = Number((await getPrefs()).age);
   const { days, status, sample } = await fetchDays(full ? 180 : 10, { hrDays: full ? 30 : 7, hrMax: age >= 16 && age <= 100 ? 208 - 0.7 * age : null });
+  const results = Object.values(status as Record<string, any>);
+  const anyOk = results.some((s) => s.ok);
+  const authFailed = results.some((s) => !s.ok && s.auth);
+  if (authFailed && !anyOk) {
+    // Google rejected the saved login for everything: keep the stored data, remember that a reconnect is needed
+    const old: any = await getKv('auth_state');
+    await setKv('auth_state', { expired: true, since: old?.expired ? old.since : new Date().toISOString() });
+    const meta = { ...(prev ?? {}), status, authExpired: true };
+    await setKv('sync_meta', meta);
+    return meta;
+  }
+  await setKv('auth_state', { expired: false });
   await saveDays(days as { date: string }[]);
-  const meta = { fetchedAt: new Date().toISOString(), status, sample, backfill: full ? 180 : prev?.backfill };
+  const meta = { fetchedAt: new Date().toISOString(), status, sample, backfill: full ? 180 : prev?.backfill, authExpired: false };
   await setKv('sync_meta', meta);
   return meta;
 }
@@ -46,6 +58,7 @@ export async function payload({ refresh = false, demo = false } = {}) {
     }
     days = await loadDays(200);
   }
+  const authState: any = source === 'demo' ? null : await getKv('auth_state');
   // Demo mode shows a sample profile so Healthspan is visible
   const hsPrefs = source === 'demo' ? { age: 34, sex: 'male', ...prefs } : prefs;
   enrich(days, prefs);
@@ -54,6 +67,7 @@ export async function payload({ refresh = false, demo = false } = {}) {
     source, fetchedAt: meta.fetchedAt, prefs, days,
     insights: ins, analytics: an, healthspan: hs, weekly: weeklyReview(days, an, hs, ins),
     status: meta.status ?? {}, sample: meta.sample,
+    auth: { expired: !!authState?.expired, since: authState?.since ?? null },
     aiEnabled: !!process.env.GROQ_API_KEY,
   };
 }

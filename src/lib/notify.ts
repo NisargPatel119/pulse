@@ -22,6 +22,10 @@ export function eveningMessage(p): PushMessage {
   return { title: 'Time to wind down', body: `Aim to be in bed by ${plan.bedtime} for ${fmtH(plan.needMin)} of sleep${plan.debtMin > 60 ? ` (you're ${fmtH(plan.debtMin)} behind this week)` : ''}.`, url: '/#sleep', tag: 'crescent_moon' };
 }
 
+export function authMessage(): PushMessage {
+  return { title: 'Pulse lost its Google connection', body: 'New data has stopped syncing. Tap to reconnect; it takes a few seconds.', url: '/#today', tag: 'warning' };
+}
+
 export function weeklyMessage(review): PushMessage {
   return { title: 'Your weekly review is ready', body: review?.headline || 'See how your week went.', url: '/#insights', tag: 'bar_chart' };
 }
