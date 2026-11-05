@@ -27,7 +27,7 @@ function demoDays(n = 45) {
     const hrv = 55 + (asleepTarget - 7) * 8 - fatigue * 3 - bedOffset * 0.3 + (r() - 0.5) * 8;
     const rhr = 56 - (asleepTarget - 7) * 1.2 + fatigue * 0.8 + (r() - 0.5) * 3;
     fatigue = Math.max(0, fatigue * 0.6 + (steps / 15000 + azm / 60 + exMin / 70) - 1);
-    const ill = i < 2 && n > 30;
+    const ill = (i === 12 || i === 13) && n > 30; // a short sample "illness" dip in the past, so charts and insights have a pattern
     const names = ['Run','Weights','Cycling','Walk','HIIT'];
     const wname = names[Math.floor(r() * names.length)];
     const wstartHour = 7 + Math.floor(r() * 14);

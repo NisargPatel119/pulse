@@ -16,9 +16,10 @@ export default function PrivacyPage() {
       <p style={{ ...p, color: '#8b93a1' }}>Last updated: November 4, 2026</p>
 
       <p style={p}>
-        Pulse is a personal health dashboard built and run by one individual for their own use. It shows recovery, sleep, activity and
-        similar insights from data in the owner&apos;s own Google Health account. It has no advertising, no public sign-up, and no user
-        accounts other than the owner&apos;s.
+        Pulse is open-source software that each person runs for themselves. This page describes how the software handles data in this
+        deployment, which is operated by its owner for their own use. It shows recovery, sleep, activity and similar insights from data
+        in the owner&apos;s own Google Health account. It has no advertising, no public sign-up, and no user accounts other than the
+        owner&apos;s.
       </p>
 
       <h2 style={h2}>What data Pulse accesses</h2>
@@ -36,7 +37,7 @@ export default function PrivacyPage() {
 
       <h2 style={h2}>Where the data is stored</h2>
       <p style={p}>
-        Data is stored in a private database controlled by the owner and served by a private deployment on Vercel. Access to the app is
+        Data is stored in a private database controlled by the owner and served by the owner&apos;s own deployment (typically on Vercel). Access to the app is
         protected by a password. The Google login token is kept in that same database.
       </p>
 
@@ -69,7 +70,7 @@ export default function PrivacyPage() {
       </p>
 
       <h2 style={h2}>Contact</h2>
-      <p style={p}>Questions about this policy can be sent to the app owner at the support email shown on the Google sign-in consent screen.</p>
+      <p style={p}>Questions about this policy can be sent to the person who operates this deployment, using the support email shown on the Google sign-in consent screen. The source code is open and can be reviewed on GitHub.</p>
     </main>
   );
 }

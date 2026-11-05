@@ -1,12 +1,39 @@
 {
   "name": "pulse",
-  "version": "0.2.0",
+  "version": "1.0.0",
+  "description": "Free, private, self-hosted WHOOP-style recovery, sleep and strain for Fitbit, built on the Google Health API.",
   "private": true,
+  "license": "MIT",
+  "homepage": "https://github.com/NisargPatel119/pulse#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NisargPatel119/pulse.git"
+  },
+  "bugs": {
+    "url": "https://github.com/NisargPatel119/pulse/issues"
+  },
+  "keywords": [
+    "fitbit",
+    "google-health-api",
+    "whoop-alternative",
+    "recovery",
+    "sleep",
+    "hrv",
+    "wearables",
+    "self-hosted",
+    "nextjs",
+    "pwa",
+    "health"
+  ],
+  "engines": {
+    "node": ">=20.9"
+  },
   "scripts": {
     "dev": "next dev -p 3002",
     "build": "next build",
     "start": "next start",
-    "demo": "node scripts/demo.mjs"
+    "demo": "node scripts/demo.mjs",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",
