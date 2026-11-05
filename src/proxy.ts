@@ -5,6 +5,9 @@ import { SESSION_COOKIE, verifySessionToken } from '@/lib/session';
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  // The privacy policy must be reachable without signing in (Google's OAuth consent screen links to it)
+  if (pathname === '/privacy') return NextResponse.next();
+
   // Demo deployment: only made-up data, nothing to protect
   if (process.env.DEMO_MODE === 'true' || process.env.DEMO_MODE === '1') {
     return pathname === '/login' ? NextResponse.redirect(new URL('/', req.url)) : NextResponse.next();
