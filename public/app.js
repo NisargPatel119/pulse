@@ -137,6 +137,7 @@ function vitalTiles() {
     { key: 'hrv', label: 'HRV', unit: 'ms', good: 1, dec: 0 },
     { key: 'rhr', label: 'Resting HR', unit: 'bpm', good: -1, dec: 0 },
     win(14).some((x) => x.stress != null) ? { key: 'stress', label: 'Stress', unit: '/3', good: -1, dec: 1 } : { key: 'spo2', label: 'Blood oxygen', unit: '%', good: 1, dec: 1 },
+    ...(win(14).some((x) => x.temp != null) ? [{ key: 'temp', label: 'Skin temp', unit: '', good: -1, dec: 1 }] : []),
     { key: 'steps', label: 'Steps', unit: '', good: 0, dec: 0 },
   ];
   return defs.map((v) => {
@@ -145,6 +146,7 @@ function vitalTiles() {
     const series = win(14).map((x) => x[v.key]);
     let chip = '';
     if (v.key === 'steps') chip = '<span class="flat">goal 8,000</span>';
+    else if (v.key === 'temp') chip = `<span class="${d.temp >= 0.8 ? 'down' : 'flat'}">${Math.abs(d.temp) < 0.5 ? 'In range' : d.temp >= 0.8 ? 'Elevated' : d.temp > 0 ? 'A bit warm' : 'A bit cool'}</span>`;
     else if (v.key === 'stress') chip = `<span class="${d.stress >= 2 ? 'down' : d.stress >= 1 ? 'flat' : 'up'}">${d.stress >= 2 ? 'High' : d.stress >= 1 ? 'Moderate' : 'Low'}</span>`;
     else {
       const b = nonNull(days().filter((x) => x.date < d.date).slice(-28).map((x) => x[v.key]));
@@ -153,7 +155,7 @@ function vitalTiles() {
         chip = Math.abs(diff) < th ? '<span class="flat">≈ usual</span>' : `<span class="${(diff > 0) === (v.good > 0) ? 'up' : 'down'}">${diff > 0 ? '▲' : '▼'} ${Math.abs(round(diff, v.dec))}</span>`;
       }
     }
-    const val = v.key === 'steps' ? d.steps.toLocaleString() : round(d[v.key], v.dec);
+    const val = v.key === 'steps' ? d.steps.toLocaleString() : v.key === 'temp' ? fmtDev(d.temp) : round(d[v.key], v.dec);
     return `<div class="vt">${ib(v.key)}<div class="vl">${v.label}</div><div class="vv">${val}<small>${v.unit}</small></div><div class="vd">${chip}</div>${C.spark(series, css('--mut'), 100, 26)}</div>`;
   }).join('');
 }
@@ -330,7 +332,7 @@ function contribRow(c) {
   const col = c.status === 'good' ? css('--rec-hi') : c.status === 'bad' ? css('--rec-lo') : css('--mut');
   const pos = clamp(0.5 + c.delta / (6 * c.sd), 0.03, 0.97) * 100;
   const word = c.status === 'good' ? 'Better than usual' : c.status === 'bad' ? 'Off baseline' : 'In your normal range';
-  return `<div class="contrib" style="--c:${col}"><div class="row"><b>${c.label}</b><span>${round(c.value, c.dec)}${c.unit} <span class="sub">· baseline ${round(c.base, c.dec)}${c.unit}</span></span></div><div class="range"><div class="b"></div><div class="m" style="left:${pos}%"></div></div><div class="sub" style="margin-top:6px;font-size:12px;color:${col}">${word}</div></div>`;
+  return `<div class="contrib" style="--c:${col}"><div class="row"><b>${c.label}</b><span>${cv(c, c.value)} <span class="sub">· baseline ${cv(c, c.base)}</span></span></div><div class="range"><div class="b"></div><div class="m" style="left:${pos}%"></div></div><div class="sub" style="margin-top:6px;font-size:12px;color:${col}">${word}</div></div>`;
 }
 
 function viewRecovery() {
@@ -345,7 +347,7 @@ function viewRecovery() {
     <div class="card"><h3>What's driving it <small>vs your 28-day baseline</small></h3>${rec.contrib.length ? rec.contrib.map(contribRow).join('') : '<p class="sub">No contributors yet.</p>'}</div>
   </div>
   <div class="card"><h3>Recovery score</h3>${recLegend()}${C.bars(w, (d) => d.recovery, { min: 0, max: 100, colorFn: recColor, patternFn: recPat, fmt: (v) => v + '% · ' + recWord(v), unit: '', label: 'recovery score', wide: true, ticks: 3 })}</div>
-  <div class="grid2">${mini('Heart rate variability', 'hrv', css('--rec-hi'), 'ms', 0)}${mini('Resting heart rate', 'rhr', css('--rec-lo'), 'bpm', 0)}${mini('Respiratory rate', 'resp', css('--strain'), 'rpm', 1)}${mini('Blood oxygen', 'spo2', css('--sleep'), '%', 1)}${w.some((d) => d.temp != null) ? mini('Skin temperature', 'temp', css('--rec-mid'), '°C vs baseline', 2) : ''}${w.some((d) => d.vo2 != null) ? mini('VO₂ max', 'vo2', css('--accent'), 'ml/kg/min', 1) : ''}</div>
+  <div class="grid2">${mini('Heart rate variability', 'hrv', css('--rec-hi'), 'ms', 0)}${mini('Resting heart rate', 'rhr', css('--rec-lo'), 'bpm', 0)}${mini('Respiratory rate', 'resp', css('--strain'), 'rpm', 1)}${mini('Blood oxygen', 'spo2', css('--sleep'), '%', 1)}${w.some((d) => d.temp != null) ? tempCard(w) : ''}${w.some((d) => d.vo2 != null) ? mini('VO₂ max', 'vo2', css('--accent'), 'ml/kg/min', 1) : ''}</div>
   <div class="card"><h3>What moves your recovery</h3>${drivers}</div></div>`;
 }
 
@@ -444,6 +446,7 @@ function settingsBody() {
   const real = S.data.source !== 'demo' || S.state?.connected;
   const p = S.data.prefs, hs = S.data.healthspan || {};
   return `${zoomHtml()}
+  <label>Temperature unit <span><select id="tempUnit"><option value="F" ${tempUnit() === 'F' ? 'selected' : ''}>°F</option><option value="C" ${tempUnit() === 'C' ? 'selected' : ''}>°C</option></select></span></label>
   <label>Baseline sleep need <span><input id="need" type="number" min="5" max="11" step="0.25" value="${p.sleepNeedHours}"> h</span></label>
   <label>Age (for Pulse Age) <span><input id="age" type="number" min="16" max="100" step="1" value="${p.age ?? hs.age ?? ''}" placeholder="–"></span></label>
   <label>Sex (for Pulse Age) <span><select id="sex"><option value="" ${!(p.sex || hs.sex) ? 'selected' : ''}>–</option><option value="male" ${(p.sex || hs.sex) === 'male' ? 'selected' : ''}>Male</option><option value="female" ${(p.sex || hs.sex) === 'female' ? 'selected' : ''}>Female</option></select></span></label>
@@ -657,3 +660,22 @@ function maybeRefresh(trigger) {
 document.addEventListener('visibilitychange', () => { if (!document.hidden) maybeRefresh('visible'); });
 addEventListener('online', () => maybeRefresh('visible'));
 setInterval(() => { renderBadge(); maybeRefresh('tick'); }, 60000);
+
+// ---- skin temperature (shown as a deviation from your own baseline) ----
+const tempUnit = () => { const s = lsGet('pulse_temp_unit'); return s === 'C' || s === 'F' ? s : /^en-US/.test(navigator.language || '') ? 'F' : 'C'; };
+const tempK = () => (tempUnit() === 'F' ? 1.8 : 1);
+const fmtDev = (c) => { const v = round(c * tempK(), 1); return (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(1) + '°' + tempUnit(); };
+const fmtAbs = (c) => (tempUnit() === 'F' ? (c * 9) / 5 + 32 : c).toFixed(1) + '°' + tempUnit();
+const cv = (c, v) => (c.key === 'temp' ? fmtDev(v) : round(v, c.dec) + c.unit);
+function tempCard(w) {
+  const d = lastWith((x) => x.temp != null);
+  if (!d) return '';
+  const word = Math.abs(d.temp) < 0.5 ? 'In your normal range' : d.temp >= 0.8 ? 'Elevated: possible illness, alcohol or a warm room' : d.temp >= 0.5 ? 'A bit warm' : d.temp <= -0.5 ? 'A bit cool' : '';
+  const abs = d.tempAbs != null ? ` · ${fmtAbs(d.tempAbs)} overnight${d.tempBase != null ? `, baseline ${fmtAbs(d.tempBase)}` : ''}` : '';
+  const k = tempK();
+  return `<div class="card">${ib('temp')}<h3>Skin temperature <small>vs your baseline</small></h3>
+    <div style="display:flex;align-items:baseline;gap:10px"><span class="big">${fmtDev(d.temp)}</span><span class="sub">${relDay(d.date)}</span></div>
+    <div class="sub" style="margin:4px 0 10px">${word}${abs}</div>
+    ${C.line(w, (x) => (x.temp == null ? null : x.temp * k), { color: css('--rec-mid'), band: true, unit: '°' + tempUnit(), dec: 1, fmt: (v) => (v >= 0 ? '+' : '') + round(v, 1), label: 'skin temperature deviation' })}</div>`;
+}
+document.addEventListener('change', (e) => { if (e.target.id === 'tempUnit') { lsSet('pulse_temp_unit', e.target.value); render(); } });

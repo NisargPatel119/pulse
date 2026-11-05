@@ -66,12 +66,13 @@ export async function api(pathAndQuery) {
   return j;
 }
 
-async function listAll(type, filter, pageSize, maxPages = 20) {
+async function listAll(type, filter, pageSize, maxPages = 20, extra = {}) {
   const pts = [];
   let token;
   for (let i = 0; i < maxPages; i++) {
     const q = new URLSearchParams({ pageSize: String(pageSize) });
     if (filter) q.set('filter', filter);
+    for (const [k, v] of Object.entries(extra)) q.set(k, String(v));
     if (token) q.set('pageToken', token);
     const j = await api(`/users/me/dataTypes/${type}/dataPoints?${q}`);
     pts.push(...(j.dataPoints || []));
@@ -93,7 +94,7 @@ const num = (v) => (v == null || v === '' ? null : isFinite(Number(v)) ? Number(
 const dateOf = (dp) => {
   const d = pick(dp, ['date']);
   if (typeof d === 'string') return d.slice(0, 10);
-  const o = dp?.dailyRestingHeartRate?.date || dp?.dailyHeartRateVariability?.date || dp?.dailyOxygenSaturation?.date || dp?.dailyRespiratoryRate?.date;
+  const o = dp?.dailyRestingHeartRate?.date || dp?.dailyHeartRateVariability?.date || dp?.dailyOxygenSaturation?.date || dp?.dailyRespiratoryRate?.date || dp?.dailySleepTemperatureDerivations?.date;
   if (o && o.year) return `${o.year}-${String(o.month).padStart(2, '0')}-${String(o.day).padStart(2, '0')}`;
   return null;
 };
@@ -216,7 +217,10 @@ export async function fetchDays(n = 35, opts: { hrDays?: number; hrMax?: number 
     run('steps', () => listAll('steps', `steps.interval.start_time >= "${since}"`, 10000, 20)),
     run('active-zone-minutes', () => listAll('active-zone-minutes', `active_zone_minutes.interval.start_time >= "${since}"`, 10000, 20)),
     run('exercise', () => listAll('exercise', `exercise.interval.civil_start_time >= "${sinceD}"`, 25, 12)),
-    run('skin-temperature', () => listAll('daily-sleep-temperature-derivations', `daily_sleep_temperature_derivations.date >= "${sinceD}"`, 100)),
+    run('skin-temperature', async () => {
+      try { return await listAll('daily-sleep-temperature-derivations', `daily_sleep_temperature_derivations.date >= "${sinceD}"`, 100); }
+      catch (e) { if (e?.name === 'AuthError') throw e; return await listAll('daily-sleep-temperature-derivations', null, 100, 5, { startTime: since, endTime: new Date().toISOString() }); }
+    }),
     run('vo2-max', () => listAll('vo2-max', `vo2_max.sample_time.physical_time >= "${since}"`, 100, 2)),
     run('heart-rate', () => listAll('heart-rate', `heart_rate.sample_time.physical_time >= "${hrSince}"`, 10000, 16)),
   ]);
@@ -229,7 +233,14 @@ export async function fetchDays(n = 35, opts: { hrDays?: number; hrMax?: number 
   daily(hrv, 'hrv', ['averageHeartRateVariabilityMilliseconds', 'heartRateVariabilityMilliseconds', 'rmssd', 'dailyRmssd', 'average']);
   daily(spo2, 'spo2', ['averagePercentage', 'average', 'percentage', 'value']);
   daily(resp, 'resp', ['breathsPerMinute', 'averageBreathsPerMinute', 'fullSleepBreathsPerMinute', 'value']);
-  daily(temp, 'temp', ['nightlyTemperatureDeviationCelsius', 'temperatureDeviationCelsius', 'deviationCelsius', 'relativeNightlyTemperatureCelsius', 'nightlyRelative', 'value']);
+  // Nightly wrist temperature: Google sends the night's value and a personal baseline; the deviation is the difference
+  for (const dp of temp) {
+    const date = dateOf(dp), night = num(pick(dp, ['nightlyTemperatureCelsius'])), base = num(pick(dp, ['baselineTemperatureCelsius']));
+    if (!date || night == null) continue;
+    const d = get(date);
+    d.tempAbs = night;
+    if (base != null) { d.tempBase = base; d.temp = Math.round((night - base) * 100) / 100; }
+  }
   for (const dp of vo2) { const t = pick(dp, ['physicalTime', 'sampleTime', 'time']); const v = num(pick(dp, ['vo2Max', 'vo2MaxMlPerKgPerMin', 'value'])); if (t && v != null) get(localDate(t)).vo2 = v; }
 
   // Sums only count whole days: the oldest (partial) day in the window is skipped

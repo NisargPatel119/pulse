@@ -241,7 +241,7 @@ body{overflow-x:hidden}
 .gv small,.vv small,.hsv small{font-size:13px;font-weight:600;color:var(--mut);margin-left:3px;letter-spacing:0}
 .gl .scale{display:none}
 .gl .target{margin:8px 0 0}
-.vitals{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.vitals{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
 .vt{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;min-width:0}
 .vt .vd{font-size:13px;font-weight:700;min-height:20px;margin:2px 0 6px}
 .hs{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:16px 20px}
@@ -391,3 +391,5 @@ html.tiny .wk .st2 div:nth-child(n+2){display:none}
 .banner.err .btn{text-decoration:none;white-space:nowrap}
 .banner.err b{color:var(--tx)}
 @media(max-width:560px){.banner.err .btn{width:100%;text-align:center}}
+
+@media(max-width:860px){.vitals .vt:last-child:nth-child(odd){grid-column:1/-1}}

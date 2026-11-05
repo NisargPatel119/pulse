@@ -80,6 +80,7 @@ function recoveryOf(days, i, sleepPerf) {
 function enrich(days, prefs) {
   const base = (prefs.sleepNeedHours || 8) * 60;
   days.forEach((d, i) => {
+    if (d.temp == null && d.tempAbs != null) { const prior = nums(days.slice(Math.max(0, i - 14), i).map((x) => x.tempAbs)); if (prior.length >= 5) d.temp = round(d.tempAbs - mean(prior), 2); }
     d.sleepParts = sleepParts(days, i, base);
     d.sleepScore = sleepScoreOf(d.sleepParts);
     const r = recoveryOf(days, i, d.sleepScore);

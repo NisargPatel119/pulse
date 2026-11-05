@@ -56,6 +56,13 @@ const EXPLAIN = {
     ranges: [['0–1', 'Low'], ['1–2', 'Moderate'], ['2–3', 'High']],
     moves: ['Slow breathing for 2 minutes', 'A short walk', 'Less caffeine', 'More sleep'],
   },
+  temp: {
+    title: 'Skin temperature',
+    what: 'How warm your skin runs overnight compared with your own baseline.',
+    how: 'Your Fitbit measures temperature while you sleep and compares it with a personal baseline built from your previous nights. Pulse shows the difference. It is a trend signal, not a fever thermometer.',
+    ranges: [['Within ±0.5°C (±0.9°F)', 'Normal'], ['+0.5 to +0.8°C', 'A bit warm'], ['Above +0.8°C (+1.4°F)', 'Elevated: often illness, alcohol, a warm room or a cycle phase'], ['Below −0.5°C', 'Cooler than usual']],
+    moves: ['Room temperature and bedding', 'Alcohol raises it', 'Illness or the start of a fever', 'Menstrual cycle phase', 'Hot showers or late workouts'],
+  },
   healthspan: {
     title: 'Pulse Age',
     what: 'An estimate of your biological age from your sleep, activity and heart fitness.',
